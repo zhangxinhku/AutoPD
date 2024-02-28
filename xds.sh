@@ -3,17 +3,23 @@ shopt -s extglob
 start_time=$(date +%s)
 
 #Input variables
-DATAPATH=${1}
-ROTATION_AXIS=${2}
-ROUND=${3}
-scr_dir=${4}
-file_type=${5}
-Flag_XDS=${6}
-SPACE_GROUP_NUMBER=${7}
-UNIT_CELL_CONSTANTS=${8}
+
+for arg in "$@"; do
+    IFS="=" read -r key value <<< "$arg"
+    case $key in
+        data_path) DATA_PATH="$value" ;;
+        rotation_axis) ROTATION_AXIS="$value" ;;
+        round) ROUND="$value" ;;
+        source_dir) SOURCE_DIR="$value" ;;
+        file_type) FILE_TYPE="$value" ;;
+        flag) FLAG_XDS="$value" ;;
+        sp_number) SPACE_GROUP_NUMBER="$value" ;;
+        cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
+    esac
+done
 
 #Determine whether running this script according to Flag_XDS
-case "${Flag_XDS}" in
+case "${FLAG_XDS}" in
     "")
         mkdir -p XDS
         cd XDS
@@ -30,15 +36,15 @@ mkdir -p XDS_${ROUND}
 cd XDS_${ROUND}
 
 #Create datapath for generate_XDS.INP
-case "${file_type}" in
+case "${FILE_TYPE}" in
   "h5")
-    filename=$(find ${DATAPATH} -maxdepth 1 -type f -name "*master.h5" -printf "%f")
+    filename=$(find "${DATA_PATH}" -maxdepth 1 -type f ! -name '.*' -name "*master.h5" -printf "%f")
     ;;
   +([0-9]))
-    filename=$(basename $(find ${DATAPATH} -type f -name "*.[0-9]*" | head -1) | perl -pe 's/(\d+)$/ "?" x length($1) /e')
+    filename=$(basename $(find ${DATA_PATH} -type f ! -name '.*' -name "*.[0-9]*" | head -1) | perl -pe 's/(\d+)$/ "?" x length($1) /e')
     ;;
   "bz2")
-    filename=$(basename $(find ${DATAPATH} -type f -name "*.bz2" | head -1))
+    filename=$(basename $(find ${DATA_PATH} -type f -name "*.bz2" | head -1))
     base=${filename%.*}
     middle=${base#*.*}
     base=${filename%%.*}
@@ -56,32 +62,38 @@ case "${file_type}" in
     esac
     ;;
   *)
-    filename=$(ls ${DATAPATH}/*.${file_type} 2>/dev/null | head -1)
-    filename=$(basename ${filename})
+    filename=$(ls ${DATA_PATH}/*.${FILE_TYPE} 2>/dev/null | head -1)
+    filename=$(basename "${filename}")
     base=${filename%.*}
     ext=${filename##*.}
-    digits=${base##*_}
-    num_stars=$(printf "%0.s?" $(seq 1 ${#digits}))
-    filename="${base%_*}_${num_stars}.${ext}"
+
+    suffix=$(echo "${base}" | sed -e 's/.*[^0-9]\([0-9]*\)$/\1/')
+    suffix_length=${#suffix}
+
+    num_stars=$(printf "%0.s?" $(seq 1 ${suffix_length}))
+
+    new_base=$(echo "${base}" | sed -e "s/[0-9]*$/${num_stars}/")
+    filename="${new_base}.${ext}"
     ;;
 esac
 
-echo "Data: ${DATAPATH}/${filename}" > XDS_${ROUND}.log
+echo "Data: ${DATA_PATH}/${filename}" > XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
 #Generate XDS.INP XSCALE.INP
-${scr_dir}/generate_XDS.INP "${DATAPATH}/${filename}" > generate_XDS.log
+${SOURCE_DIR}/generate_XDS.INP "${DATA_PATH}/${filename}" > generate_XDS.log
 cat generate_XDS.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
-cp ${scr_dir}/XSCALE.INP XSCALE.INP
+cp ${SOURCE_DIR}/XSCALE.INP XSCALE.INP
 
-if [ "${file_type}" = "h5" ]; then
-  sed -i "/NAME_TEMPLATE_OF_DATA_FRAMES/a LIB=${scr_dir}/dectris-neggia.so" XDS.INP
+if [ "${FILE_TYPE}" = "h5" ]; then
+  sed -i "/NAME_TEMPLATE_OF_DATA_FRAMES/a LIB=${SOURCE_DIR}/durin-plugin.so" XDS.INP
 fi
 
 #Rotation axis selection
-if [ "${ROTATION_AXIS}" = "-1" ]; then
-  sed -i 's/ROTATION_AXIS=.*$/ROTATION_AXIS= -1 0 0/g' XDS.INP
+if [ -n "${ROTATION_AXIS}" ]; then
+    ROTATION_AXIS="${ROTATION_AXIS//,/ }"
+    sed -i "s/ROTATION_AXIS=.*$/ROTATION_AXIS= ${ROTATION_AXIS}/g" XDS.INP
 fi
 
 #Space group and unit cell
@@ -100,8 +112,8 @@ cp XYCORR.INP 1_XYCORR.INP
 cp XYCORR.log 1_XYCORR.log
 
 if [ ! -f "XYCORR.LP" ]; then
-    Flag_XDS=0
-    echo "Flag_XDS=${Flag_XDS}" >> ../../temp.txt
+    FLAG_XDS=0
+    echo "FLAG_XDS=${FLAG_XDS}" >> ../../temp.txt
     echo "Round ${ROUND} XDS processing failed!"
     exit 1
 fi
@@ -142,8 +154,8 @@ cp IDXREF.log 4_IDXREF.log
 cp IDXREF.LP 4_IDXREF.LP
 
 if [ ! -f "XPARM.XDS" ]; then
-    Flag_XDS=0
-    echo "Flag_XDS=${Flag_XDS}" >> ../../temp.txt
+    FLAG_XDS=0
+    echo "FLAG_XDS=${FLAG_XDS}" >> ../../temp.txt
     echo "Round ${ROUND} XDS processing failed!"
     exit 1
 fi
@@ -151,6 +163,13 @@ fi
 cp XPARM.XDS 4_XPARM.XDS
 cat IDXREF.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
+
+if grep -q "!!! ERROR !!!" "XDS_${ROUND}.log"; then
+    FLAG_XDS=0
+    echo "FLAG_XDS=${FLAG_XDS}" >> ../../temp.txt
+    echo "Round ${ROUND} XDS processing failed!"
+    exit 1
+fi
 
 #5_DEFPIX Update UNTRUSTED_ELLIPSE ORGX ORGY DETECTOR_DISTANCE ROTATION_AXIS INCIDENT_BEAM_DIRECTION
 sed -i 's/JOB=.*$/JOB= DEFPIX/g' XDS.INP
@@ -171,17 +190,20 @@ cp DEFPIX.LP 5_DEFPIX.LP
 cat DEFPIX.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
-if grep -q "!!! ERROR !!!" "XDS_${ROUND}.log"; then
-    Flag_XDS=0
-    echo "Flag_XDS=${Flag_XDS}" >> ../../temp.txt
+#6_INTEGRATE
+sed -i 's/JOB=.*$/JOB= INTEGRATE/g' XDS.INP
+sed -i 's/REFINE(INTEGRATE)=.*$/REFINE(INTEGRATE)= POSITION CELL BEAM ORIENTATION/g' XDS.INP
+
+MAX_RUN_TIME=20m
+timeout $MAX_RUN_TIME xds_par -par NUMBER_OF_FORKED_INTEGRATE_JOBS=2 > INTEGRATE.log
+
+if [ $? -eq 124 ]; then
+    FLAG_XDS=0
+    echo "FLAG_XDS=${FLAG_XDS}" >> ../../temp.txt
     echo "Round ${ROUND} XDS processing failed!"
     exit 1
 fi
 
-#6_INTEGRATE
-sed -i 's/JOB=.*$/JOB= INTEGRATE/g' XDS.INP
-sed -i 's/REFINE(INTEGRATE)=.*$/REFINE(INTEGRATE)= POSITION CELL BEAM ORIENTATION/g' XDS.INP
-xds_par -par NUMBER_OF_FORKED_INTEGRATE_JOBS=2 > INTEGRATE.log
 cp XDS.INP INTEGRATE.INP
 cp INTEGRATE.INP 6_INTEGRATE.INP
 cp INTEGRATE.log 6_INTEGRATE.log
@@ -200,8 +222,8 @@ cp CORRECT.log 7_CORRECT.log
 cp CORRECT.LP 7_CORRECT.LP
 
 if [ ! -f "GXPARM.XDS" ]; then
-    Flag_XDS=0
-    echo "Flag_XDS=${Flag_XDS}" >> ../../temp.txt
+    FLAG_XDS=0
+    echo "FLAG_XDS=${FLAG_XDS}" >> ../../temp.txt
     echo "Round ${ROUND} XDS processing failed!"
     exit 1
 fi
@@ -301,15 +323,15 @@ cat aimless.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
 if [ ! -f "XDS_unmerged.mtz" ]; then
-    Flag_XDS=0
-    echo "Flag_XDS=${Flag_XDS}" >> ../../temp.txt
+    FLAG_XDS=0
+    echo "FLAG_XDS=${FLAG_XDS}" >> ../../temp.txt
     echo "Round ${ROUND} XDS processing failed!"
     exit 1
 fi
 
 
 #15_dials.estimate_resolution cc_half=0.3 misigma=2.0 completeness=0.85
-dials.estimate_resolution XDS_unmerged.mtz misigma=2.0 completeness=0.85 rmerge=2.0 > /dev/null
+dials.estimate_resolution XDS_unmerged.mtz > /dev/null
 cp dials.estimate_resolution.log 15_dials.estimate_resolution.log
 cp dials.estimate_resolution.html 15_dials.estimate_resolution.html
 cat dials.estimate_resolution.log >> XDS_${ROUND}.log
@@ -333,14 +355,14 @@ cat aimless.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
 #17_ctruncate
-ctruncate -mtzin XDS.mtz -mtzout XDS_truncated.mtz -colin '/*/*/[IMEAN,SIGIMEAN]' -colano '/*/*/[I(+),SIGI(+),I(-),SIGI(-)]' > ctruncate.log
+ctruncate -mtzin XDS.mtz -mtzout XDS_truncated.mtz -colin '/*/*/[IMEAN,SIGIMEAN]' -colano '/*/*/[I(+),SIGI(+),I(-),SIGI(-)]' > ctruncate.log 2>> error.log
 cp ctruncate.log 17_ctruncate.log
 cat ctruncate.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
 if [ ! -f "XDS_truncated.mtz" ]; then
-    Flag_XDS=0
-    echo "Flag_XDS=${Flag_XDS}" >> ../../temp.txt
+    FLAG_XDS=0
+    echo "FLAG_XDS=${FLAG_XDS}" >> ../../temp.txt
     echo "Round ${ROUND} XDS processing failed!"
     exit 1
 fi
@@ -355,8 +377,8 @@ cat freeR_flag.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
 if [ ! -f "XDS_free.mtz" ]; then
-    Flag_XDS=0
-    echo "Flag_XDS=${Flag_XDS}" >> ../../temp.txt
+    FLAG_XDS=0
+    echo "FLAG_XDS=${FLAG_XDS}" >> ../../temp.txt
     echo "Round ${ROUND} XDS processing failed!"
     exit 1
 fi
@@ -379,27 +401,29 @@ distance_refined=$(grep "CRYSTAL TO DETECTOR DISTANCE (mm)" XDS_${ROUND}/CORRECT
 echo "Distance_refined               [mm] = ${distance_refined}" >> XDS_SUMMARY/XDS_SUMMARY.log
 beam_center_refined=$(grep "DETECTOR COORDINATES (PIXELS) OF DIRECT BEAM" XDS_${ROUND}/CORRECT.LP | awk '{print $7 "," $8}')
 echo "Beam_center_refined         [pixel] = ${beam_center_refined}" >> XDS_SUMMARY/XDS_SUMMARY.log
-${scr_dir}/dr_log.sh XDS_${ROUND}/aimless.log XDS_${ROUND}/ctruncate.log >> XDS_SUMMARY/XDS_SUMMARY.log
+${SOURCE_DIR}/dr_log.sh XDS_${ROUND}/aimless.log XDS_${ROUND}/ctruncate.log XDS_${ROUND}/pointless.log >> XDS_SUMMARY/XDS_SUMMARY.log
 
 #Output Rmerge
 Rmerge_XDS=$(grep 'Rmerge  (all I+ and I-)' XDS_SUMMARY/XDS_SUMMARY.log | awk '{print $6}')
 Resolution_XDS=$(grep 'High resolution limit' XDS_SUMMARY/XDS_SUMMARY.log | awk '{print $4}')
+SG_XDS=$(grep 'Space group:' XDS_SUMMARY/XDS_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')
+PointGroup_XDS=$(${SOURCE_DIR}/sg2pg.sh ${SG_XDS})
 
 #Determine running successful or failed using Rmerge 
 if [ "${Rmerge_XDS}" = "" ];then
-    Flag_XDS=0
+    FLAG_XDS=0
     echo "Round ${ROUND} XDS processing failed!"
-elif [ $(echo "${Rmerge_XDS} <= 0" | bc) -eq 1 ];then
-    Flag_XDS=0
+elif [ $(echo "${Rmerge_XDS} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_XDS} >= 2" | bc) -eq 1 ];then
+    FLAG_XDS=0
     echo "Round ${ROUND} XDS processing failed!"
 else
-    Flag_XDS=1
+    FLAG_XDS=1
     echo "Round ${ROUND} XDS processing succeeded!"
-    echo "XDS ${Rmerge_XDS} ${Resolution_XDS}" >> ../temp1.txt
+    echo "XDS ${Rmerge_XDS} ${Resolution_XDS} ${PointGroup_XDS}" >> ../temp1.txt
 fi
 
 #For invoking in autopipeline_parrallel.sh
-echo "Flag_XDS=${Flag_XDS}" >> ../temp.txt
+echo "FLAG_XDS=${FLAG_XDS}" >> ../temp.txt
 
 #Extract statistics data
 mkdir -p STATISTICS_FIGURES
@@ -423,7 +447,7 @@ grep -A24 '$TABLE: L test for twinning:' ../XDS_${ROUND}/ctruncate.log | tail -2
 L_statistic=$(grep 'L statistic =' ../XDS_${ROUND}/ctruncate.log | awk '{print $4}')
 
 #Plot statistics figures
-${scr_dir}/plot.sh ${L_statistic}
+${SOURCE_DIR}/plot.sh ${L_statistic}
 
 #Go back to data_reduction folder
 cd ../..

@@ -2,34 +2,31 @@
 start_time=$(date +%s)
 
 #Input variables
-DATAPATH=${1}
-scr_dir=${2}
+DATA_PATH=${1}
+SOURCE_DIR=${2}
 ROTATION_AXIS=${3}
 
 #Determine file type
-file_type=$(find ${DATAPATH} -maxdepth 1 -type f | head -n 1 | awk -F. '{print $NF}')
+FILE_TYPE=$(find "${DATA_PATH}" -maxdepth 1 -type f ! -name '.*' | head -n 1 | awk -F. '{if (NF>1) print $NF}')
 
 #Create and enter folder for data reduction
 mkdir -p DATA_REDUCTION
 cd DATA_REDUCTION
 
 #Extract header information
-${scr_dir}/header.sh ${DATAPATH} ${file_type} > header.log
-
-#Rotation axis
-ROTATION_AXIS=${ROTATION_AXIS:-1}
+${SOURCE_DIR}/header.sh ${DATA_PATH} ${FILE_TYPE} > header.log
 
 #First round data processing
 echo ""
 echo "-------------------------------- First round data processing --------------------------------"
 echo ""
 ROUND=1
-parallel -u ::: "${scr_dir}/xds.sh ${DATAPATH} ${ROTATION_AXIS} ${ROUND} ${scr_dir} ${file_type}" "${scr_dir}/xds_xia2.sh ${DATAPATH} ${ROTATION_AXIS} ${ROUND} ${scr_dir} ${file_type}" "${scr_dir}/dials_xia2.sh ${DATAPATH} ${ROTATION_AXIS} ${ROUND} ${scr_dir} ${file_type}" "${scr_dir}/autoproc.sh ${DATAPATH} ${ROTATION_AXIS} ${ROUND} ${scr_dir} ${file_type}"
+parallel -u ::: "${SOURCE_DIR}/xds.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE}" "${SOURCE_DIR}/xds_xia2.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE}" "${SOURCE_DIR}/dials_xia2.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE}" "${SOURCE_DIR}/autoproc.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE}"
 
-Flag_XDS=$(grep 'Flag_XDS=' temp.txt | cut -d '=' -f 2)
-Flag_XDS_XIA2=$(grep 'Flag_XDS_XIA2=' temp.txt | cut -d '=' -f 2)
-Flag_DIALS_XIA2=$(grep 'Flag_DIALS_XIA2=' temp.txt | cut -d '=' -f 2)
-Flag_autoPROC=$(grep 'Flag_autoPROC=' temp.txt | cut -d '=' -f 2)
+FLAG_XDS=$(grep 'FLAG_XDS=' temp.txt | cut -d '=' -f 2)
+FLAG_XDS_XIA2=$(grep 'FLAG_XDS_XIA2=' temp.txt | cut -d '=' -f 2)
+FLAG_DIALS_XIA2=$(grep 'FLAG_DIALS_XIA2=' temp.txt | cut -d '=' -f 2)
+FLAG_autoPROC=$(grep 'FLAG_autoPROC=' temp.txt | cut -d '=' -f 2)
 
 #Compare first round result
 BEST_1=$(cat "temp1.txt" | sort -k 2 | head -n 1 | cut -d ' ' -f 1)
@@ -37,28 +34,30 @@ BEST_1=$(cat "temp1.txt" | sort -k 2 | head -n 1 | cut -d ' ' -f 1)
 #Extract space group and cell parameters from best first round result
 SPACE_GROUP_NUMBER=$(grep 'Space group number:' ${BEST_1}/${BEST_1}_SUMMARY/${BEST_1}_SUMMARY.log | cut -d ':' -f 2 | sed 's/ //g')
 SPACE_GROUP=$(grep 'Space group:' ${BEST_1}/${BEST_1}_SUMMARY/${BEST_1}_SUMMARY.log | cut -d ':' -f 2 | sed 's/ //g')
-UNIT_CELL_CONSTANTS=$(grep 'Unit cell:' ${BEST_1}/${BEST_1}_SUMMARY/${BEST_1}_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ *$//g' | sed 's/  */ /g')
+UNIT_CELL_CONSTANTS=$(grep 'Unit cell:' ${BEST_1}/${BEST_1}_SUMMARY/${BEST_1}_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ *$//g' | sed 's/  */,/g')
+UNIT_CELL=$(grep 'Unit cell:' ${BEST_1}/${BEST_1}_SUMMARY/${BEST_1}_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ *$//g' | sed 's/  */ /g')
 
-if [ "${SPACE_GROUP}" == "P2122" ]; then
+
+if [ "${SPACE_GROUP}" == "P2122" ] || [ "${SPACE_GROUP}" == "P2212" ]; then
     SPACE_GROUP="P2221"
 fi
 
 #Second round data processing
 echo ""
-if [[ ${Flag_XDS} -eq 1 && ${Flag_XDS_XIA2} -eq 1 && ${Flag_DIALS_XIA2} -eq 1 && ${Flag_autoPROC} -eq 1 ]]; then
+if [[ ${FLAG_XDS} -eq 1 && ${FLAG_XDS_XIA2} -eq 1 && ${FLAG_DIALS_XIA2} -eq 1 && ${FLAG_autoPROC} -eq 1 ]]; then
     echo "No need for second round data processing."
 else
     echo "-------------------------------- Second round data processing -------------------------------"
 fi
 echo ""
 ROUND=2
-parallel -u ::: "${scr_dir}/xds.sh ${DATAPATH} ${ROTATION_AXIS} ${ROUND} ${scr_dir} ${file_type} ${Flag_XDS} ${SPACE_GROUP_NUMBER} \"${UNIT_CELL_CONSTANTS}\"" "${scr_dir}/xds_xia2.sh ${DATAPATH} ${ROTATION_AXIS} ${ROUND} ${scr_dir} ${file_type} ${Flag_XDS_XIA2} ${SPACE_GROUP} \"${UNIT_CELL_CONSTANTS}\"" "${scr_dir}/dials_xia2.sh ${DATAPATH} ${ROTATION_AXIS} ${ROUND} ${scr_dir} ${file_type} ${Flag_DIALS_XIA2} ${SPACE_GROUP} \"${UNIT_CELL_CONSTANTS}\"" "${scr_dir}/autoproc.sh ${DATAPATH} ${ROTATION_AXIS} ${ROUND} ${scr_dir} ${file_type} ${Flag_autoPROC} ${SPACE_GROUP} \"${UNIT_CELL_CONSTANTS}\""
+parallel -u ::: "${SOURCE_DIR}/xds.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} flag=${FLAG_XDS} sp_number=${SPACE_GROUP_NUMBER} cell_constants=\"${UNIT_CELL_CONSTANTS}\"" "${SOURCE_DIR}/xds_xia2.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} flag=${FLAG_XDS_XIA2} sp=${SPACE_GROUP} cell_constants=\"${UNIT_CELL_CONSTANTS}\"" "${SOURCE_DIR}/dials_xia2.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} flag=${FLAG_DIALS_XIA2} sp=${SPACE_GROUP} cell_constants=\"${UNIT_CELL_CONSTANTS}\"" "${SOURCE_DIR}/autoproc.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} flag=${FLAG_autoPROC} sp=\"\\\"$SPACE_GROUP\\\"\" cell_constants=\"\\\"$UNIT_CELL\\\"\""
 
 #Output summary results
 echo ""
 echo "Data reduction summary:"
 echo ""
-echo "           Resolution   Rmerge   I/Sigma   CC(1/2)   Completeness   Multiplicity   Spacegroup                           Cell"
+echo "           Resolution   Rmerge   I/Sigma   CC(1/2)   Completeness   Multiplicity   Space group                           Cell"
 echo ""
 
 if [ -f "XDS/XDS_SUMMARY/XDS_SUMMARY.log" ]; then
@@ -115,19 +114,39 @@ fi
 
 #Output best results
 mkdir -p DATA_REDUCTION_SUMMARY
-#Compare first and second round result
-BEST_Rmerge=$(cat "temp1.txt" | sort -k 2 | head -n 1 | cut -d ' ' -f 1)
-BEST_Resolution=$(cat "temp1.txt" | sort -k 3 | head -n 1 | cut -d ' ' -f 1)
 
-echo "Best Rmerge result is from ${BEST_Rmerge}"
-echo ""
-cp ${BEST_Rmerge}/${BEST_Rmerge}_SUMMARY/${BEST_Rmerge}.mtz DATA_REDUCTION_SUMMARY/BEST_Rmerge.mtz
-cp ${BEST_Rmerge}/${BEST_Rmerge}_SUMMARY/${BEST_Rmerge}_SUMMARY.log DATA_REDUCTION_SUMMARY/BEST_Rmerge.log
-echo "Best Resolution result is from ${BEST_Resolution}"
-echo ""
-cp ${BEST_Resolution}/${BEST_Resolution}_SUMMARY/${BEST_Resolution}.mtz DATA_REDUCTION_SUMMARY/BEST_Resolution.mtz
-cp ${BEST_Resolution}/${BEST_Resolution}_SUMMARY/${BEST_Resolution}_SUMMARY.log DATA_REDUCTION_SUMMARY/BEST_Resolution.log
-cp DATA_REDUCTION_SUMMARY/* ../SUMMARY
+sort -k2,2n temp1.txt > sorted.txt
+read -r best_rmerge best_point_group < <(awk 'NR==1 {print $1, $4}' sorted.txt)
+
+declare -a names
+declare -a point_groups
+names+=("${best_rmerge}")
+point_groups+=("${best_point_group}")
+
+while IFS= read -r line; do
+    read -r name point_group <<< $(echo $line | awk '{print $1, $4}')
+
+    all_different=true
+    for pg in "${point_groups[@]}"; do
+        if [ "$point_group" == "$pg" ]; then
+            all_different=false
+            break
+        fi
+    done
+
+    if [ "$all_different" = true ]; then
+        names+=("${name}")
+        point_groups+=("${point_group}")
+    fi
+done < <(tail -n +2 sorted.txt)
+
+for name in "${names[@]}"; do
+    cp "${name}/${name}_SUMMARY/${name}.mtz" "DATA_REDUCTION_SUMMARY/${name}.mtz"
+    cp "${name}/${name}_SUMMARY/${name}_SUMMARY.log" "DATA_REDUCTION_SUMMARY/${name}_SUMMARY.log"
+done
+
+rm sorted.txt
+#cp DATA_REDUCTION_SUMMARY/* ../SUMMARY
 rm *.*
 
 #Go to data processing folder

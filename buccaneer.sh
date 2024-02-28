@@ -6,58 +6,72 @@ echo ""
 echo "----------------------------------------- Buccaneer -----------------------------------------"
 echo ""
 
-MTZ=$(readlink -f "${1}")
-PDB=$(readlink -f "${2}")
-SEQUENCE=$(readlink -f "${3}")
+SEQUENCE=$(readlink -f "${1}")
+scr_dir=${2}
 
 mkdir -p BUCCANEER
 cd BUCCANEER
 
-sigmaa HKLIN ${MTZ} HKLOUT PHASER_OUT_SIGMAA.mtz << EOF > SIGMAA.log
-LABIN FP=F SIGFP=SIGF FC=FC PHIC=PHIC
-LABOUT DELFWT=DELFWT FWT=FWT WCMB=WCMB
-EOF
+pdb_count=$(find ../PHASER_MR -mindepth 1 -maxdepth 1 -type d | wc -l | awk '{print $1-1}')
 
-$CBIN/ccp4-python -u $CBIN/buccaneer_pipeline -stdin << END > BUCCANEER.log
-pdbin-ref $CLIB/data/reference_structures/reference-1tqw.pdb
-mtzin-ref $CLIB/data/reference_structures/reference-1tqw.mtz
-colin-ref-fo FP.F_sigF.F,FP.F_sigF.sigF
-colin-ref-hl FC.ABCD.A,FC.ABCD.B,FC.ABCD.C,FC.ABCD.D
-seqin ${SEQUENCE}
-colin-fo F,SIGF
-colin-free FreeR_flag
-mtzin PHASER_OUT_SIGMAA.mtz
-colin-phifom PHWT,FOM
-pdbin ${PDB}
-pdbin-mr ${PDB}
-buccaneer-keyword mr-model-seed
-cycles 5
-buccaneer-anisotropy-correction
-buccaneer-fix-position
-buccaneer-1st-cycles 3
-buccaneer-1st-sequence-reliability 0.99
-buccaneer-nth-cycles 2
-buccaneer-nth-sequence-reliability 0.99
-buccaneer-nth-correlation-mode
-buccaneer-new-residue-name UNK
-buccaneer-resolution 2.0
-buccaneer-keyword model-filter-sigma 0.01
-buccaneer-keyword mr-model-filter-sigma 0.01
-refmac-mlhl 0
-refmac-twin 0
-prefix .
-END
+for (( i=1; i<=pdb_count; i++ ))
+do
+    mkdir -p BUCCANEER_${i}
+    cd BUCCANEER_${i}
 
-tail -n 13 BUCCANEER.log | head -n 6
+    if [ ! -f "../../PHASER_MR/MR_SUMMARY/Phaser_${i}.pdb" ]; then
+        echo "Phaser_${i}.pdb does not exist, skipping..."
+        continue
+    fi
+    
+    PDB=$(readlink -f "../../PHASER_MR/MR_SUMMARY/Phaser_${i}.pdb")
+    
+    if [ -f "../../PHASER_MR/MR_SUMMARY/Phaser_${i}.mtz" ]; then
+        MTZ=$(readlink -f "../../PHASER_MR/MR_SUMMARY/Phaser_${i}.mtz")
+    elif [ -f "../../DATA_REDUCTION/DATA_REDUCTION_SUMMARY" ]; then
+        summary_dir=$(realpath ../../DATA_REDUCTION/DATA_REDUCTION_SUMMARY)
+        mtz_files=($(ls "${summary_dir}"/*.mtz))
+        MTZ=${mtz_files[$i-1]}
+    else
+        mtz_file=$(find "../../INPUT_FILES" -name '*.mtz' -print -quit)
+        MTZ=$(readlink -f "$mtz_file")
+    fi
+    
+    ${scr_dir}/i2_buccaneer.sh ${MTZ} ${PDB} ${SEQUENCE} &
 
-BUILT=$(grep 'CA ' buccaneer.pdb | wc -l)
-PLACED=$(grep 'CA ' buccaneer.pdb | grep -v 'UNK'  | wc -l)
-echo "" | tee -a BUCCANEER.log
-echo "BUILT=${BUILT}" | tee -a BUCCANEER.log
-echo "PLACED=${PLACED}" | tee -a BUCCANEER.log
+    cd ..
+    echo "Buccaneer ${i} started in background!"
+done
 
+wait
+
+echo "All Buccaneer processes finished!"
 echo ""
-echo "Buccaneer finished!"
+
+best_r_free=99999
+best_i=0
+
+mkdir -p BUCCANEER_SUMMARY
+
+for i in $(seq 1 $pdb_count); do
+  grep 'R-work:' "BUCCANEER_$i/BUCCANEER.log" 2>/dev/null | sort -k4,4n | head -1 
+  r_free=$(grep 'R-work:' "BUCCANEER_$i/BUCCANEER.log" 2>/dev/null | sort -k4,4n | head -1 | awk '{print $4}')
+  r_free=${r_free:-99999}
+  
+  if (( $(echo "$r_free < $best_r_free" | bc -l) )); then
+    best_r_free=$r_free
+    best_i=$i
+  fi
+done
+
+if [ $best_i -ne 0 ]; then
+  cp "BUCCANEER_${best_i}/BUCCANEER.log" BUCCANEER_SUMMARY/
+  cp "BUCCANEER_${best_i}/XYZOUT.pdb" BUCCANEER_SUMMARY/BUCCANEER.pdb
+  cp "BUCCANEER_${best_i}/FPHIOUT.mtz" BUCCANEER_SUMMARY/BUCCANEER.mtz
+  echo "Best R-free $best_r_free is from BUCCANEER ${best_i}" | tee -a BUCCANEER_SUMMARY/BUCCANEER.log
+else
+  echo "No valid R-free values found."
+fi
 
 end_time=$(date +%s)
 total_time=$((end_time - start_time))
@@ -66,8 +80,5 @@ hours=$((total_time / 3600))
 minutes=$(( (total_time % 3600) / 60 ))
 seconds=$((total_time % 60))
 
-echo "" | tee -a BUCCANEER.log
-echo "Buccaneer took: ${hours}h ${minutes}m ${seconds}s" | tee -a BUCCANEER.log
-
-cp BUCCANEER.log ../SUMMARY
-cp buccaneer.pdb ../SUMMARY/BUCCANEER.pdb
+echo "" | tee -a BUCCANEER_SUMMARY/BUCCANEER.log
+echo "Buccaneer took: ${hours}h ${minutes}m ${seconds}s" | tee -a BUCCANEER_SUMMARY/BUCCANEER.log

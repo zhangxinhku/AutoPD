@@ -4,7 +4,7 @@ file_type=${2}
 #file_name=$(find ${DATAPATH} -type f -name "*master.h5" -printf "%f")
 case "${file_type}" in
   "h5")
-    file_name=$(find ${DATAPATH} -maxdepth 1 -type f -name "*master.h5" -printf "%f")
+    file_name=$(find "${DATAPATH}" -maxdepth 1 -type f ! -name '.*' -name "*master.h5" -printf "%f")
     dials.import ${DATAPATH}/${file_name} > /dev/null
     ;;
   *)
@@ -40,7 +40,7 @@ max_resolution_at_corners=$(grep "Max resolution (at corners)" imported.txt | aw
 echo "Max resolution (at corners)     [Å] = ${max_resolution_at_corners}"
 max_resolution_inscribed=$(grep "Max resolution (inscribed)" imported.txt | awk '{print $4}')
 echo "Max resolution (inscribed)      [Å] = ${max_resolution_inscribed}"
-distance=$(grep "distance" imported.txt | awk '{print $2}' | xargs printf "%.2f")
+distance=$(grep "distance" imported.txt | head -n 1 | awk '{print $2}' | xargs printf "%.2f")
 echo "Distance_start                 [mm] = ${distance}"
 beam_center_start=$(grep "px" imported.txt | cut -d '(' -f2 | cut -d ')' -f1)
 echo "Beam_center_start (X,Y)     [pixel] = ${beam_center_start}"

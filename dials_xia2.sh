@@ -1,15 +1,21 @@
 #Input variables
-DATAPATH=${1}
-ROTATION_AXIS=${2}
-ROUND=${3}
-scr_dir=${4}
-file_type=${5}
-Flag_DIALS_XIA2=${6}
-SPACE_GROUP=${7}
-UNIT_CELL_CONSTANTS=$( echo ${8} | sed 's/  */,/g')
+
+for arg in "$@"; do
+    IFS="=" read -r key value <<< "$arg"
+    case $key in
+        data_path) DATA_PATH="$value" ;;
+        rotation_axis) ROTATION_AXIS="$value" ;;
+        round) ROUND="$value" ;;
+        source_dir) SOURCE_DIR="$value" ;;
+        file_type) FILE_TYPE="$value" ;;
+        flag) FLAG_DIALS_XIA2="$value" ;;
+        sp) SPACE_GROUP="$value" ;;
+        cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
+    esac
+done
 
 #Determine whether running this script according to Flag_DIALS_XIA2
-case "${Flag_DIALS_XIA2}" in
+case "${FLAG_DIALS_XIA2}" in
     "")
         mkdir -p DIALS_XIA2
         cd DIALS_XIA2
@@ -25,61 +31,49 @@ cd DIALS_XIA2
 mkdir -p DIALS_XIA2_${ROUND}
 cd DIALS_XIA2_${ROUND}
 
-#Rotation axis selection
-case "${ROTATION_AXIS}" in
-  "-1")
-    REVERSE_ROTATION_AXIS=True
-    ;;
-  *)
-    REVERSE_ROTATION_AXIS=False
-    ;;
-esac
+args=()
+
+for param in "goniometer.axes=${ROTATION_AXIS}" "xia2.settings.space_group=${SPACE_GROUP}" "xia2.settings.unit_cell=${UNIT_CELL_CONSTANTS}"; do
+    IFS="=" read -r key value <<< "$param"
+    [ -n "$value" ] && args+=("$key=$value")
+done
 
 #DIALS_XIA2 processing
-if [ -z "${SPACE_GROUP}" ]; then
-    xia2 pipeline=dials atom=Se ${DATAPATH} hdf5_plugin=${scr_dir}/dectris-neggia.so reverse_phi=${REVERSE_ROTATION_AXIS} misigma=1.500000 cc_half=0.300000 rmerge=2.000000 resolution.completeness=0.850000 > /dev/null &
-    # Get the PID of the last command to wait for its completion later
-    CMD_PID=$!
 
-    # Loop to check for the file
-    while kill -0 $CMD_PID 2> /dev/null; do
-      if [[ -e "xia2-error.txt" ]]; then
-        # Kill the xia2 process
-        kill $CMD_PID
-      fi
-      sleep 2 # Check every 2 seconds
-    done
+# Start the xia2 command in the background
+xia2 pipeline=dials ${DATA_PATH} hdf5_plugin=${SOURCE_DIR}/durin-plugin.so ${args[@]} > /dev/null &
+CMD_PID=$!
 
-    # Wait for your xia2 command to finish
-    wait $CMD_PID
-else
-    xia2 pipeline=dials atom=Se ${DATAPATH} hdf5_plugin=${scr_dir}/dectris-neggia.so reverse_phi=${REVERSE_ROTATION_AXIS} xia2.settings.space_group=${SPACE_GROUP} xia2.settings.unit_cell=${UNIT_CELL_CONSTANTS} misigma=1.500000 cc_half=0.300000 rmerge=2.000000 resolution.completeness=0.850000 > /dev/null &
-    # Get the PID of the last command to wait for its completion later
-    CMD_PID=$!
+# Initialize a counter for the timeout (3600 seconds for 1 hour)
+TIMEOUT=1800
+COUNTER=0
 
-    # Loop to check for the file
-    while kill -0 $CMD_PID 2> /dev/null; do
-      if [[ -e "xia2-error.txt" ]]; then
-        # Kill the xia2 process
-        kill $CMD_PID
-      fi
-      sleep 2 # Check every 2 seconds
-    done
-
-    # Wait for your xia2 command to finish
-    wait $CMD_PID
-fi
-
-if [[ -e "xia2-error.txt" ]]; then
-    Flag_DIALS_XIA2=0
-    echo "Flag_DIALS_XIA2=${Flag_DIALS_XIA2}" >> ../../temp.txt
+# Loop to check both the file and the timeout
+while kill -0 $CMD_PID 2> /dev/null; do
+  if [[ -e "xia2-error.txt" ]]; then
+    FLAG_DIALS_XIA2=0
+    echo "FLAG_DIALS_XIA2=${FLAG_DIALS_XIA2}" >> ../../temp.txt
     echo "Round ${ROUND} DIALS_XIA2 processing failed!"
     exit 1
-fi
+  fi
+
+  # Break the loop if the command runs more than the timeout
+  if [[ $COUNTER -ge $TIMEOUT ]]; then
+    echo "xia2 command timeout. Terminating the process. Round ${ROUND} DIALS_XIA2 processing failed!"
+    kill $CMD_PID
+    exit 1
+  fi
+
+  sleep 10 # Check every 2 seconds
+  ((COUNTER+=10)) # Increment the counter by 2 for each sleep
+done
+
+# Wait for your xia2 command to finish if it didn't time out
+wait $CMD_PID
 
 if [ ! -f "DataFiles/AUTOMATIC_DEFAULT_free.mtz" ]; then
-    Flag_DIALS_XIA2=0
-    echo "Flag_DIALS_XIA2=${Flag_DIALS_XIA2}" >> ../../temp.txt
+    FLAG_DIALS_XIA2=0
+    echo "FLAG_DIALS_XIA2=${FLAG_DIALS_XIA2}" >> ../../temp.txt
     echo "Round ${ROUND} DIALS_XIA2 processing failed!"
     exit 1
 fi
@@ -92,13 +86,15 @@ output unmerged
 EOF
 
 if [ ! -f "DEFAULT/scale/AUTOMATIC_DEFAULT_aimless.mtz" ]; then
-    Flag_DIALS_XIA2=0
-    echo "Flag_DIALS_XIA2=${Flag_DIALS_XIA2}" >> ../../temp.txt
+    FLAG_DIALS_XIA2=0
+    echo "FLAG_DIALS_XIA2=${FLAG_DIALS_XIA2}" >> ../../temp.txt
     echo "Round ${ROUND} DIALS_XIA2 processing failed!"
     exit 1
 fi
 
 ctruncate -mtzin DataFiles/AUTOMATIC_DEFAULT_free.mtz -mtzout DataFiles/AUTOMATIC_DEFAULT_truncated.mtz -colin '/*/*/[IMEAN,SIGIMEAN]' -colano '/*/*/[I(+),SIGI(+),I(-),SIGI(-)]' > LogFiles/AUTOMATIC_DEFAULT_ctruncate.log
+
+pointless hklin DataFiles/AUTOMATIC_DEFAULT_free.mtz hklout DataFiles/pointless.mtz > LogFiles/pointless.log
 
 cd ..
 
@@ -113,27 +109,29 @@ echo "Distance_refined               [mm] = ${distance_refined}" >> DIALS_XIA2_S
 beam_center_refined=$(grep "px:" DIALS_XIA2_${ROUND}/DataFiles/SWEEP1.log | cut -d '(' -f2 | cut -d ')' -f1)
 echo "Beam_center_refined         [pixel] = ${beam_center_refined}" >> DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log
 rm DIALS_XIA2_${ROUND}/DataFiles/SWEEP1.log
-${scr_dir}/dr_log.sh DIALS_XIA2_${ROUND}/LogFiles/AUTOMATIC_DEFAULT_aimless.log DIALS_XIA2_${ROUND}/LogFiles/AUTOMATIC_DEFAULT_ctruncate.log >> DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log
+${SOURCE_DIR}/dr_log.sh DIALS_XIA2_${ROUND}/LogFiles/AUTOMATIC_DEFAULT_aimless.log DIALS_XIA2_${ROUND}/LogFiles/AUTOMATIC_DEFAULT_ctruncate.log DIALS_XIA2_${ROUND}/LogFiles/pointless.log >> DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log
 
 #Output Rmerge
 Rmerge_DIALS_XIA2=$(grep 'Rmerge  (all I+ and I-)' DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log | awk '{print $6}')
 Resolution_DIALS_XIA2=$(grep 'High resolution limit' DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log | awk '{print $4}')
+SG_DIALS_XIA2=$(grep 'Space group:' DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')
+PointGroup_DIALS_XIA2=$(${SOURCE_DIR}/sg2pg.sh ${SG_DIALS_XIA2})
 
 #Determine running successful or failed using Rmerge 
 if [ "${Rmerge_DIALS_XIA2}" = "" ];then
-    Flag_DIALS_XIA2=0
+    FLAG_DIALS_XIA2=0
     echo "Round ${ROUND} DIALS_XIA2 processing failed!"
-elif [ $(echo "${Rmerge_DIALS_XIA2} <= 0" | bc) -eq 1 ];then
-    Flag_DIALS_XIA2=0
+elif [ $(echo "${Rmerge_DIALS_XIA2} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_DIALS_XIA2} >= 2" | bc) -eq 1 ];then
+    FLAG_DIALS_XIA2=0
     echo "Round ${ROUND} DIALS_XIA2 processing failed!"
 else
-    Flag_DIALS_XIA2=1
+    FLAG_DIALS_XIA2=1
     echo "Round ${ROUND} DIALS_XIA2 processing succeeded!"
-    echo "DIALS_XIA2 ${Rmerge_DIALS_XIA2} ${Resolution_DIALS_XIA2}" >> ../temp1.txt
+    echo "DIALS_XIA2 ${Rmerge_DIALS_XIA2} ${Resolution_DIALS_XIA2} ${PointGroup_DIALS_XIA2}" >> ../temp1.txt
 fi
 
 #For invoking in autopipeline_parrallel.sh
-echo "Flag_DIALS_XIA2=${Flag_DIALS_XIA2}" >> ../temp.txt
+echo "FLAG_DIALS_XIA2=${FLAG_DIALS_XIA2}" >> ../temp.txt
 
 #Extract statistics data
 mkdir -p STATISTICS_FIGURES
@@ -157,7 +155,7 @@ grep -A24 '$TABLE: L test for twinning:' ../DIALS_XIA2_${ROUND}/LogFiles/AUTOMAT
 L_statistic=$(grep 'L statistic =' ../DIALS_XIA2_${ROUND}/LogFiles/AUTOMATIC_DEFAULT_ctruncate.log | awk '{print $4}')
 
 #Plot statistics figures
-${scr_dir}/plot.sh ${L_statistic}
+${SOURCE_DIR}/plot.sh ${L_statistic}
 
 #Go back to data_reduction folder
 cd ../..

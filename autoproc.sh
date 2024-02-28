@@ -1,49 +1,52 @@
 #Input variables
-DATAPATH=${1}
-ROTATION_AXIS=${2}
-ROUND=${3}
-scr_dir=${4}
-file_type=${5}
-Flag_autoPROC=${6}
-SPACE_GROUP=${7}
-UNIT_CELL_CONSTANTS=${8}
+
+for arg in "$@"; do
+    IFS="=" read -r key value <<< "$arg"
+    case $key in
+        data_path) DATA_PATH="$value" ;;
+        rotation_axis) ROTATION_AXIS="$value" ;;
+        round) ROUND="$value" ;;
+        source_dir) SOURCE_DIR="$value" ;;
+        file_type) FILE_TYPE="$value" ;;
+        flag) FLAG_autoPROC="$value" ;;
+        sp) SPACE_GROUP="$value" ;;
+        cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
+    esac
+done
 
 #Determine whether running this script according to Flag_autoPROC
-case "${Flag_autoPROC}" in
+case "${FLAG_autoPROC}" in
     "")
         mkdir -p autoPROC
         cd autoPROC
         mkdir -p autoPROC_SUMMARY
-        cd ..
         ;;
     "1")
         exit
         ;;
-esac
+    "0")
+        cd autoPROC
+        ;;
+esac 
 
-cd autoPROC
+args=()
 
-#Rotation axis selection
-case "${ROTATION_AXIS}" in
-  "-1")
-    REVERSE_ROTATION_AXIS=yes
-    ;;
-  *)
-    REVERSE_ROTATION_AXIS=no
-    ;;
-esac
+for param in "autoPROC_XdsKeyword_ROTATION_AXIS=${ROTATION_AXIS}" "symm=${SPACE_GROUP}" "cell=${UNIT_CELL_CONSTANTS}"; do
+    IFS="=" read -r key value <<< "$param"
+    [ -n "$value" ] && args+=("$key=$value")
+done
 
 #autoPROC processing
-if [ "${file_type}" = "h5" ]; then
-    file_name=$(find ${DATAPATH} -maxdepth 1 -type f -name "*master.h5" -printf "%f")
-    process -ANO -h5 ${DATAPATH}/${file_name} -d autoPROC_${ROUND} ReversePhi=${REVERSE_ROTATION_AXIS} symm="${SPACE_GROUP}" cell="${UNIT_CELL_CONSTANTS}" > autoPROC_${ROUND}.log
+if [ "${FILE_TYPE}" = "h5" ]; then
+    file_name=$(find "${DATA_PATH}" -maxdepth 1 -type f ! -name '.*' -name "*master.h5" -printf "%f")
+    process -h5 ${DATA_PATH}/${file_name} -d autoPROC_${ROUND} ${args[@]} > autoPROC_${ROUND}.log
 else
-    process -ANO -I ${DATAPATH} -d autoPROC_${ROUND} ReversePhi=${REVERSE_ROTATION_AXIS} symm="${SPACE_GROUP}" cell="${UNIT_CELL_CONSTANTS}" > autoPROC_${ROUND}.log
+    process -I ${DATA_PATH} -d autoPROC_${ROUND} "${args[@]}" > autoPROC_${ROUND}.log
 fi
 
 if [ ! -f "autoPROC_${ROUND}/truncate-unique.mtz" ]; then
-    Flag_autoPROC=0
-    echo "Flag_autoPROC=${Flag_autoPROC}" >> ../temp.txt
+    FLAG_autoPROC=0
+    echo "FLAG_autoPROC=${FLAG_autoPROC}" >> ../temp.txt
     echo "Round ${ROUND} autoPROC processing failed!"
     exit
 fi
@@ -60,27 +63,29 @@ distance_refined=$(grep "CRYSTAL TO DETECTOR DISTANCE (mm)" autoPROC_${ROUND}/CO
 echo "Distance_refined               [mm] = ${distance_refined}" >> autoPROC_SUMMARY/autoPROC_SUMMARY.log
 beam_center_refined=$(grep "DETECTOR COORDINATES (PIXELS) OF DIRECT BEAM" autoPROC_${ROUND}/CORRECT.LP | awk '{print $7 "," $8}')
 echo "Beam_center_refined         [pixel] = ${beam_center_refined}" >> autoPROC_SUMMARY/autoPROC_SUMMARY.log
-${scr_dir}/dr_log.sh autoPROC_${ROUND}/aimless.log autoPROC_${ROUND}/ctruncate.log >> autoPROC_SUMMARY/autoPROC_SUMMARY.log
+${SOURCE_DIR}/dr_log.sh autoPROC_${ROUND}/aimless.log autoPROC_${ROUND}/ctruncate.log autoPROC_${ROUND}/pointless.log >> autoPROC_SUMMARY/autoPROC_SUMMARY.log
 
 #Output Rmerge
 Rmerge_autoPROC=$(grep 'Rmerge  (all I+ and I-)' autoPROC_SUMMARY/autoPROC_SUMMARY.log | awk '{print $6}')
 Resolution_autoPROC=$(grep 'High resolution limit' autoPROC_SUMMARY/autoPROC_SUMMARY.log | awk '{print $4}')
+SG_autoPROC=$(grep 'Space group:' autoPROC_SUMMARY/autoPROC_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')
+PointGroup_autoPROC=$(${SOURCE_DIR}/sg2pg.sh ${SG_autoPROC})
 
 #Determine running successful or failed using Rmerge 
 if [ "${Rmerge_autoPROC}" = "" ];then
-    Flag_autoPROC=0
+    FLAG_autoPROC=0
     echo "Round ${ROUND} autoPROC processing failed!"
-elif [ $(echo "${Rmerge_autoPROC} <= 0" | bc) -eq 1 ];then
-    Flag_autoPROC=0
+elif [ $(echo "${Rmerge_autoPROC} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_autoPROC} >= 2" | bc) -eq 1 ];then
+    FLAG_autoPROC=0
     echo "Round ${ROUND} autoPROC processing failed!"
 else
-    Flag_autoPROC=1
+    FLAG_autoPROC=1
     echo "Round ${ROUND} autoPROC processing succeeded!"
-    echo "autoPROC ${Rmerge_autoPROC} ${Resolution_autoPROC}" >> ../temp1.txt
+    echo "autoPROC ${Rmerge_autoPROC} ${Resolution_autoPROC} ${PointGroup_autoPROC}" >> ../temp1.txt
 fi
 
 #For invoking in autopipeline_parrallel.sh
-echo "Flag_autoPROC=${Flag_autoPROC}" >> ../temp.txt
+echo "FLAG_autoPROC=${FLAG_autoPROC}" >> ../temp.txt
 
 #Extract statistics data
 mkdir -p STATISTICS_FIGURES
@@ -104,7 +109,7 @@ grep -A24 '$TABLE: L test for twinning:' ../autoPROC_${ROUND}/ctruncate.log | ta
 L_statistic=$(grep 'L statistic =' ../autoPROC_${ROUND}/ctruncate.log | awk '{print $4}')
 
 #Plot statistics figures
-${scr_dir}/plot.sh ${L_statistic}
+${SOURCE_DIR}/plot.sh ${L_statistic}
 
 #cp ../autoPROC_${ROUND}/SPOT.XDS_pre-cleanup.SpotsPerImage.png ../../DATA_REDUCTION_SUMMARY/spots_vs_batches.png
 
