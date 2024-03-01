@@ -44,7 +44,7 @@ To install AutoPD, download and unpack the repository. Remember to add the follo
 export PATH=<path>/AutoPD/:$PATH
 ```
 
-Please note an issue with the ProvideAsuContents.py file in the CCP4 installation folder. For Buccaneer to run successfully, replace the existing ProvideAsuContents.py (located at <path>/ccp4-8.0/lib/python3.7/site-packages/ccp4i2/wrappers/ProvideAsuContents/script/ProvideAsuContents.py) with the version provided in the main branch.
+Please note an issue with the ProvideAsuContents.py file in the CCP4 installation folder. For Buccaneer to run successfully, replace the existing ProvideAsuContents.py (located at <path>/ccp4-8.0/lib/python3.7/site-packages/ccp4i2/wrappers/ProvideAsuContents/script/ProvideAsuContents.py) with the version provided in the main branch (contributed by Martin Noble).
 
 ## Usage
 AutoPD is straightforward to use. Provide the path to your diffraction data and sequence file, then execute the command as follows:
