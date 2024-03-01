@@ -2,7 +2,7 @@
 AutoPD is an automatic biological macromolecular crystallography data processing and structure determination pipeline for high-performance synchrotron radiation sources and academic users. Requiring only diffraction data and a sequence file for input, this pipeline efficiently generates high-precision structural models.
 
 ## Requirements
-To access the full features of AutoPD, the following software packages should be installed:
+To utilize the full capabilities of AutoPD, the following software packages must be installed:
 ### CCP4
 Downloads website: [https://www.ccp4.ac.uk/](https://www.ccp4.ac.uk/)
 ### Phenix
@@ -14,14 +14,14 @@ Downloads website: [https://dials.github.io/installation.html](https://dials.git
 ### autoPROC
 Downloads website: [https://www.globalphasing.com/autoproc/](https://www.globalphasing.com/autoproc/)
 ### IPCAS (optional)
-The IPCAS installation package is included on the main page. To install, execute the following commands:
+The installation package for IPCAS can be found on the main page. Follow these commands to install:
 ```
 tar xvf Ipcas_source_3.0beta_for_22_03_25.tar.gz
 cd Ipcas_source_3.0beta_for_22_03_25.tar.gz
 ./ipcas_install.tcsh
 ```
 
-After the successful installation of these softwares, bash users can enable access to these softwares by adding the following lines to their ~/.bashrc file:
+To enable these software packages for bash users, add the following lines to your ~/.bashrc file:
 ```
 #CCP4
 source <path>/ccp4-8.0/bin/ccp4.setup-sh
@@ -39,16 +39,18 @@ export LD_LIBRARY_PATH=<path>/ccp4-8.0/share/ccp4i/ipcas/lib/:$LD_LIBRARY_PATH
 ```
 
 ## Installation
-To install AutoPD, simply download and unpack the repository, and make a note of the path to the folder and adding the following lines to the ~/.bashrc file:
+To install AutoPD, download and unpack the repository. Remember to add the following line to your ~/.bashrc file to ensure the path is correctly set:
 ```
 export PATH=<path>/AutoPD/:$PATH
 ```
 
+Please note an issue with the ProvideAsuContents.py file in the CCP4 installation folder. For Buccaneer to run successfully, replace the existing ProvideAsuContents.py (located at <path>/ccp4-8.0/lib/python3.7/site-packages/ccp4i2/wrappers/ProvideAsuContents/script/ProvideAsuContents.py) with the version provided in the main branch.
+
 ## Usage
-To use AutoPD, you just need to provide your diffraction image path and sequence file and run like this:
+AutoPD is straightforward to use. Provide the path to your diffraction data and sequence file, then execute the command as follows:
 ```
 autopipeline.sh data_path=<path_to_diffraction_data> seq_file=<path_to_sequence>/sequence.fasta out_dir=<output_folder_name> | tee output.log
 ```
 
 ## Note
-AutoPD now only supports command-line executions. AutoPD only be tested on the Ubuntu22.04 operation system, the usage on other operation systems are not clear now. If you have any inquiries or problems, please contact Xin via zx2020@connect.hku.hk
+Currently, AutoPD supports only command-line executions and has been tested exclusively on the Ubuntu 22.04 operating system. The compatibility with other operating systems has not been established. For any inquiries or issues, please reach out to Xin at zx2020@connect.hku.hk.
