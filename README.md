@@ -51,11 +51,11 @@ AutoPD is straightforward to use. Provide the path to your diffraction data and 
 ```
 autopipeline.sh data_path=<path_to_diffraction_data> seq_file=<path_to_sequence>/sequence.fasta out_dir=<output_folder_name> | tee output.log
 ```
-AutoPD supports optional parameters for enhanced flexibility:
-**mtz_file=<path_to_mtz_file>/data.mtz**   Skips data reduction if provided.
-**pdb_path=<path_to_pdb_files>**           Uses provided PDB files for MR, skipping search model generation.
-**rotation_axis=0,0,1**                    Custom rotation axis for data reduction.
-**mp_date=yyyy-mm-dd**                     Excludes homologs released after this date for MrParse, useful for data tests.
+AutoPD supports optional parameters for enhanced flexibility:  
+**mtz_file=<path_to_mtz_file>/data.mtz**   Skips data reduction if provided.  
+**pdb_path=<path_to_pdb_files>**           Uses provided PDB files for MR, skipping search model generation.  
+**rotation_axis=0,0,1**                    Custom rotation axis for data reduction.  
+**mp_date=yyyy-mm-dd**                     Excludes homologs released after this date for MrParse, useful for data tests.  
 
 ## Note
 Currently, AutoPD supports only command-line executions and has been tested exclusively on the Ubuntu 22.04 operating system. The compatibility with other operating systems has not been established. For any inquiries or issues, please reach out to Xin at zx2020@connect.hku.hk.
