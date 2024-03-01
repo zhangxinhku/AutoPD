@@ -44,13 +44,18 @@ To install AutoPD, download and unpack the repository. Remember to add the follo
 export PATH=<path>/AutoPD/:$PATH
 ```
 
-Please note an issue with the ProvideAsuContents.py file in the CCP4 installation folder. For Buccaneer to run successfully, replace the existing ProvideAsuContents.py (located at <path>/ccp4-8.0/lib/python3.7/site-packages/ccp4i2/wrappers/ProvideAsuContents/script/ProvideAsuContents.py) with the version provided in the main branch (contributed by Martin Noble).
+Please note an issue with the ProvideAsuContents.py file in the CCP4 installation folder. For Buccaneer to run successfully, replace the existing ProvideAsuContents.py (located at `<path>/ccp4-8.0/lib/python3.7/site-packages/ccp4i2/wrappers/ProvideAsuContents/script/ProvideAsuContents.py`) with the version provided in the main branch (contributed by Martin Noble).
 
 ## Usage
 AutoPD is straightforward to use. Provide the path to your diffraction data and sequence file, then execute the command as follows:
 ```
 autopipeline.sh data_path=<path_to_diffraction_data> seq_file=<path_to_sequence>/sequence.fasta out_dir=<output_folder_name> | tee output.log
 ```
+AutoPD supports optional parameters for enhanced flexibility:
+**mtz_file=<path_to_mtz_file>/data.mtz**   Skips data reduction if provided.
+**pdb_path=<path_to_pdb_files>**           Uses provided PDB files for MR, skipping search model generation.
+**rotation_axis=0,0,1**                    Custom rotation axis for data reduction.
+**mp_date=yyyy-mm-dd**                     Excludes homologs released after this date for MrParse, useful for data tests.
 
 ## Note
 Currently, AutoPD supports only command-line executions and has been tested exclusively on the Ubuntu 22.04 operating system. The compatibility with other operating systems has not been established. For any inquiries or issues, please reach out to Xin at zx2020@connect.hku.hk.
