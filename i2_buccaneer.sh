@@ -14,7 +14,7 @@ do
     fi
 done < "${SEQ_FILE}"
 
-/home/programs/ccp4-8.0/lib/python3.7/site-packages/ccp4i2/bin/i2run ProvideAsuContents \
+i2run ProvideAsuContents \
 	--ASU_CONTENT \
                    sequence=${sequence} \
 	           nCopies=1 \
@@ -23,7 +23,7 @@ done < "${SEQ_FILE}"
 	
 ASU=$(readlink -f ASUCONTENTFILE.asu.xml)
 
-/home/programs/ccp4-8.0/lib/python3.7/site-packages/ccp4i2/bin/i2run buccaneer_build_refine_mr \
+i2run buccaneer_build_refine_mr \
 	--F_SIGF \
 		fullPath=${MTZ} \
 		columnLabels="/*/*/[F,SIGF]" \
