@@ -1,5 +1,13 @@
-#Input variables
+#!/bin/bash
+#############################################################################################################
+# Script Name: autoproc.sh
+# Description: This script is used for autoPROC.
+# Author: ZHANG Xin
+# Date Created: 2023-06-01
+# Last Modified: 2024-03-05
+#############################################################################################################
 
+#Input variables
 for arg in "$@"; do
     IFS="=" read -r key value <<< "$arg"
     case $key in
@@ -29,6 +37,7 @@ case "${FLAG_autoPROC}" in
         ;;
 esac 
 
+#Optional parameters
 args=()
 
 for param in "autoPROC_XdsKeyword_ROTATION_AXIS=${ROTATION_AXIS}" "symm=${SPACE_GROUP}" "cell=${UNIT_CELL_CONSTANTS}"; do
@@ -65,7 +74,7 @@ beam_center_refined=$(grep "DETECTOR COORDINATES (PIXELS) OF DIRECT BEAM" autoPR
 echo "Beam_center_refined         [pixel] = ${beam_center_refined}" >> autoPROC_SUMMARY/autoPROC_SUMMARY.log
 ${SOURCE_DIR}/dr_log.sh autoPROC_${ROUND}/aimless.log autoPROC_${ROUND}/ctruncate.log autoPROC_${ROUND}/pointless.log >> autoPROC_SUMMARY/autoPROC_SUMMARY.log
 
-#Output Rmerge
+#Extract Rmerge Resolution Space group Point group
 Rmerge_autoPROC=$(grep 'Rmerge  (all I+ and I-)' autoPROC_SUMMARY/autoPROC_SUMMARY.log | awk '{print $6}')
 Resolution_autoPROC=$(grep 'High resolution limit' autoPROC_SUMMARY/autoPROC_SUMMARY.log | awk '{print $4}')
 SG_autoPROC=$(grep 'Space group:' autoPROC_SUMMARY/autoPROC_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')
@@ -84,7 +93,7 @@ else
     echo "autoPROC ${Rmerge_autoPROC} ${Resolution_autoPROC} ${PointGroup_autoPROC}" >> ../temp1.txt
 fi
 
-#For invoking in autopipeline_parrallel.sh
+#For invoking in autopipeline.sh
 echo "FLAG_autoPROC=${FLAG_autoPROC}" >> ../temp.txt
 
 #Extract statistics data

@@ -1,4 +1,11 @@
 #!/bin/bash
+#############################################################################################################
+# Script Name: mr.sh
+# Description: This script is used for molecular replacement.
+# Author: ZHANG Xin
+# Date Created: 2023-06-01
+# Last Modified: 2024-03-05
+#############################################################################################################
 
 start_time=$(date +%s)
 
@@ -7,15 +14,16 @@ SEQUENCE=${1}
 MTZ_IN=${2}
 Z_NUMBER=${3}
 
+#Determine the number of search models
 TEMPLATE_NUMBER=$(ls SEARCH_MODELS/*.pdb | wc -l)
 
+#Rename search models
 counter=1
 for file in SEARCH_MODELS/*.pdb; do
     new_name="SEARCH_MODELS/ENSEMBLE${counter}.pdb"
     mv -f "$file" "$new_name" 2>/dev/null || true
     let counter+=1
 done
-
 
 echo ""
 echo "MR template number: ${TEMPLATE_NUMBER}"
@@ -29,12 +37,14 @@ mkdir MR_SUMMARY
 echo "------------------------------------------Phaser MR------------------------------------------"
 echo ""
 
+#Get mtz files folder
 if [ "${MTZ_IN}" -eq 1 ]; then
   summary_dir=$(realpath ../INPUT_FILES)
 else
   summary_dir=$(realpath ../DATA_REDUCTION/DATA_REDUCTION_SUMMARY)
 fi
 
+#Do MR for each file in mtz folder
 mtz_files=($(ls "${summary_dir}"/*.mtz))
 num_mtz_files=${#mtz_files[@]}
 
@@ -113,6 +123,7 @@ echo ""
 echo "${num_mtz_files} Phaser tasks are completed."
 echo ""
 
+#Extract and show MR results
 for (( i=1; i<=num_mtz_files; i++ ))
 do
     if [ -f "MR_$i/PHASER.1.pdb" ]; then
@@ -130,9 +141,9 @@ if [ $solution_num -eq 0 ]; then
     echo "No MR solution!"
 fi
 
+#Calculate and echo timing information
 end_time=$(date +%s)
 total_time=$((end_time - start_time))
-
 hours=$((total_time / 3600))
 minutes=$(( (total_time % 3600) / 60 ))
 seconds=$((total_time % 60))

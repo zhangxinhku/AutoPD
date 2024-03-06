@@ -1,9 +1,17 @@
+#!/bin/bash
+#############################################################################################################
+# Script Name: xds.sh
+# Description: This script is used for XDS.
+# Author: ZHANG Xin
+# Date Created: 2023-06-01
+# Last Modified: 2024-03-05
+#############################################################################################################
+
 shopt -s extglob
 
 start_time=$(date +%s)
 
 #Input variables
-
 for arg in "$@"; do
     IFS="=" read -r key value <<< "$arg"
     case $key in
@@ -31,11 +39,12 @@ case "${FLAG_XDS}" in
         ;;
 esac
 
+#Create folder for XDS processing
 cd XDS
 mkdir -p XDS_${ROUND}
 cd XDS_${ROUND}
 
-#Create datapath for generate_XDS.INP
+#Generate datapath for generate_XDS.INP
 case "${FILE_TYPE}" in
   "h5")
     filename=$(find "${DATA_PATH}" -maxdepth 1 -type f ! -name '.*' -name "*master.h5" -printf "%f")
@@ -383,13 +392,6 @@ if [ ! -f "XDS_free.mtz" ]; then
     exit 1
 fi
 
-end_time=$(date +%s)
-total_time=$((end_time - start_time))
-
-hours=$((total_time / 3600))
-minutes=$(( (total_time % 3600) / 60 ))
-seconds=$((total_time % 60))
-echo "Total time: ${hours}h ${minutes}m ${seconds}s" >> XDS_${ROUND}.log
 cd ..
 
 #Output XDS processing result
@@ -403,7 +405,7 @@ beam_center_refined=$(grep "DETECTOR COORDINATES (PIXELS) OF DIRECT BEAM" XDS_${
 echo "Beam_center_refined         [pixel] = ${beam_center_refined}" >> XDS_SUMMARY/XDS_SUMMARY.log
 ${SOURCE_DIR}/dr_log.sh XDS_${ROUND}/aimless.log XDS_${ROUND}/ctruncate.log XDS_${ROUND}/pointless.log >> XDS_SUMMARY/XDS_SUMMARY.log
 
-#Output Rmerge
+#Extract Rmerge Resolution Space group Point group
 Rmerge_XDS=$(grep 'Rmerge  (all I+ and I-)' XDS_SUMMARY/XDS_SUMMARY.log | awk '{print $6}')
 Resolution_XDS=$(grep 'High resolution limit' XDS_SUMMARY/XDS_SUMMARY.log | awk '{print $4}')
 SG_XDS=$(grep 'Space group:' XDS_SUMMARY/XDS_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')
@@ -448,6 +450,14 @@ L_statistic=$(grep 'L statistic =' ../XDS_${ROUND}/ctruncate.log | awk '{print $
 
 #Plot statistics figures
 ${SOURCE_DIR}/plot.sh ${L_statistic}
+
+#Calculate and echo timing information
+end_time=$(date +%s)
+total_time=$((end_time - start_time))
+hours=$((total_time / 3600))
+minutes=$(( (total_time % 3600) / 60 ))
+seconds=$((total_time % 60))
+echo "Total time: ${hours}h ${minutes}m ${seconds}s" >> ../XDS_${ROUND}/XDS_${ROUND}.log
 
 #Go back to data_reduction folder
 cd ../..

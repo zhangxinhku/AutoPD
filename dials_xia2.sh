@@ -1,5 +1,13 @@
-#Input variables
+#!/bin/bash
+#############################################################################################################
+# Script Name: dials_xia2.sh
+# Description: This script is used for xia2-dials.
+# Author: ZHANG Xin
+# Date Created: 2023-06-01
+# Last Modified: 2024-03-05
+#############################################################################################################
 
+#Input variables
 for arg in "$@"; do
     IFS="=" read -r key value <<< "$arg"
     case $key in
@@ -27,10 +35,12 @@ case "${FLAG_DIALS_XIA2}" in
         ;;
 esac
 
+#Create folder for xia2-dials
 cd DIALS_XIA2
 mkdir -p DIALS_XIA2_${ROUND}
 cd DIALS_XIA2_${ROUND}
 
+#Optional parameters
 args=()
 
 for param in "goniometer.axes=${ROTATION_AXIS}" "xia2.settings.space_group=${SPACE_GROUP}" "xia2.settings.unit_cell=${UNIT_CELL_CONSTANTS}"; do
@@ -38,7 +48,7 @@ for param in "goniometer.axes=${ROTATION_AXIS}" "xia2.settings.space_group=${SPA
     [ -n "$value" ] && args+=("$key=$value")
 done
 
-#DIALS_XIA2 processing
+#xia2-dials processing
 
 # Start the xia2 command in the background
 xia2 pipeline=dials ${DATA_PATH} hdf5_plugin=${SOURCE_DIR}/durin-plugin.so ${args[@]} > /dev/null &
@@ -111,7 +121,7 @@ echo "Beam_center_refined         [pixel] = ${beam_center_refined}" >> DIALS_XIA
 rm DIALS_XIA2_${ROUND}/DataFiles/SWEEP1.log
 ${SOURCE_DIR}/dr_log.sh DIALS_XIA2_${ROUND}/LogFiles/AUTOMATIC_DEFAULT_aimless.log DIALS_XIA2_${ROUND}/LogFiles/AUTOMATIC_DEFAULT_ctruncate.log DIALS_XIA2_${ROUND}/LogFiles/pointless.log >> DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log
 
-#Output Rmerge
+#Extract Rmerge Resolution Space group Point group
 Rmerge_DIALS_XIA2=$(grep 'Rmerge  (all I+ and I-)' DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log | awk '{print $6}')
 Resolution_DIALS_XIA2=$(grep 'High resolution limit' DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log | awk '{print $4}')
 SG_DIALS_XIA2=$(grep 'Space group:' DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')

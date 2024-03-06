@@ -1,22 +1,24 @@
 #!/bin/bash
-# Program:
-#      Protein crystal diffraction data auto-processing pipeline.
-# History:
-# 2022/08/30       ZHANG Xin       First release
+#############################################################################################################
+# Script Name: autopipeline.sh
+# Description: This script controls all modules in the AutoPD.
+# Author: ZHANG Xin
+# Date Created: 2023-06-01
+# Last Modified: 2024-03-05
+#############################################################################################################
 
 start_time=$(date +%s)
 
-#Script directory
+#Get AutoPD directory
 scr_dir=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
+#Input variables
 DATA_PATH=""
 SEQUENCE=""
 EXPERIMENT=""
 MR_TEMPLATE_PATH=""
 ROTATION_AXIS=""
-DR_CRITERION="rmerge" # rmerge resolution Default:rmerge
-MODEL_BUILDING=2 # 1->Buccaneer 2->Autobuild 3-> IPCAS Default:2
-OUT_DIR="pipeline_processed"
+OUT_DIR="AutoPD_processed"
 DATE=""
 Z=""
 
@@ -26,16 +28,14 @@ for arg in "$@"; do
     value="${arg#*=}"
 
     case $key in
-      data_path) DATA_PATH="$value";;
-      seq_file) SEQUENCE="$value";;
-      mtz_file) EXPERIMENT="$value";;
-      pdb_path) MR_TEMPLATE_PATH="$value";;
-      rotation_axis) ROTATION_AXIS="$value";; 
-      dr_criterion) DR_CRITERION="$value";;
-      model_building) MODEL_BUILDING="$value";;
-      out_dir) OUT_DIR="$value";;
-      mp_date) DATE="$value";;
-      z) Z="$value";;
+      data_path) DATA_PATH="$value";;            #The path contains diffraction images
+      seq_file) SEQUENCE="$value";;              #The sequence file
+      mtz_file) EXPERIMENT="$value";;            #The mtz file
+      pdb_path) MR_TEMPLATE_PATH="$value";;      #The path contains search models for MR
+      rotation_axis) ROTATION_AXIS="$value";;    #Rotation axis, e.g. 1,0,0
+      out_dir) OUT_DIR="$value";;                #Output folder name
+      mp_date) DATE="$value";;                   #The homologs released after this date will be excluded from the result of MrParse, for data testing.
+      z) Z="$value";;                            #The number of copies in an asymmetric unit
       *) echo "Invalid parameter: $arg" >&2; exit 1;;
     esac
   else
@@ -47,17 +47,6 @@ DATA_PATH=$(readlink -f "${DATA_PATH}")
 SEQUENCE=$(readlink -f "${SEQUENCE}")
 EXPERIMENT=$(readlink -f "${EXPERIMENT}")
 MR_TEMPLATE_PATH=$(readlink -f "${MR_TEMPLATE_PATH}")
-
-#Input
-if [ -z "${DATA_PATH}" ]; then
-    echo "Warning: No data path was input. Data reduction will be skipped."
-    DR="false"
-elif [ ! -e "${DATA_PATH}" ]; then
-    echo "Warning: Data path does not exist. Data reduction will be skipped."
-    DR="false"
-else
-    echo "Data: ${DATA_PATH}"
-fi
 
 #Create and enter folder for data processing
 if [ -d "$OUT_DIR" ]; then
@@ -72,7 +61,17 @@ mkdir -p ${OUT_DIR}
 cd ${OUT_DIR}
 mkdir -p SEARCH_MODELS SUMMARY INPUT_FILES
 
-#Optional input
+#Input check
+if [ -z "${DATA_PATH}" ]; then
+    echo "Warning: No data path was input. Data reduction will be skipped."
+    DR="false"
+elif [ ! -e "${DATA_PATH}" ]; then
+    echo "Warning: Data path does not exist. Data reduction will be skipped."
+    DR="false"
+else
+    echo "Data: ${DATA_PATH}"
+fi
+
 if [ -z "${SEQUENCE}" ]; then
     echo "Warning: No sequence was input. Only data reduction will be performed."
     MP="false"
@@ -120,6 +119,7 @@ else
     MP="false"
 fi
 
+#Data reduction and MrParse
 echo "============================================================================================="
 echo "                                   Data reduction & MrParse                                  "
 echo "============================================================================================="
@@ -156,14 +156,12 @@ else
     cp SEARCH_MODELS/* SUMMARY/
 fi
 
-#exit
+#MR
 echo ""
 echo "============================================================================================="
 echo "                                    Molecular Replacement                                    "
 echo "============================================================================================="
 
-
-#Molecular replacement
 ${scr_dir}/mr.sh ${SEQUENCE} ${MTZ_IN} ${Z}
 
 if [ -z "$(find PHASER_MR/MR_SUMMARY/ -maxdepth 1 -type f -name '*.pdb')" ]; then
@@ -171,14 +169,15 @@ if [ -z "$(find PHASER_MR/MR_SUMMARY/ -maxdepth 1 -type f -name '*.pdb')" ]; the
     exit 1
 fi
 
+#Model building and Refinement
 echo ""
 echo "============================================================================================="
 echo "                                         Model building                                      "
 echo "============================================================================================="
 echo ""
 
-#Model building and Refinement
-echo "CCP4 Buccaneer will be performed."
+#Buccaneer
+echo "Buccaneer will be performed."
 ${scr_dir}/buccaneer.sh ${SEQUENCE} ${scr_dir}
     
 if [ -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ]; then
@@ -192,22 +191,47 @@ else
     echo "BUCCANEER.pdb does not exist."
 fi
 
-MTZ="SUMMARY/PHASER.1.mtz"
+#Phenix Autobuild
 PDB="SUMMARY/PHASER.1.pdb"
-
-if [ ! -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ] || [ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ]; then
-     echo "Phenix.autobuild will be performed."
-#    "${scr_dir}/autobuild.sh" "${MTZ}" "${PDB}" "${SEQUENCE}"
+if [ -f "SUMMARY/PHASER.1.mtz" ]; then
+  MTZ="SUMMARY/PHASER.1.mtz"
+else
+  MTZ=$(find SUMMARY -name "*.mtz" -print -quit)
 fi
 
-#  "ipcas")
-#    echo "IPCAS will be performed."
-#    ${scr_dir}/ipcas.sh ${MTZ} ${PDB} ${SEQUENCE} 0.5 10 . > IPCAS.log
-#    mv IPCAS.log IPCAS
+if [ ! -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ] || [ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ]; then
+     echo "Phenix Autobuild will be performed."
+    "${scr_dir}/autobuild.sh" "${MTZ}" "${PDB}" "${SEQUENCE}"
+    
+    if [ -f "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" ]; then
+        cp AUTOBUILD/AUTOBUILD_SUMMARY/* SUMMARY/
+        r_free=$(grep 'Best solution on cycle:' AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.log | awk -F'/' '{print $3}')
+    else
+        echo "AUTOBUILD.pdb does not exist."
+    fi
+fi
 
+#IPCAS
+if [ ! -f "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" ] || [ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ]; then
+     echo "IPCAS 2.0 will be performed."
+    ${scr_dir}/ipcas.sh ${MTZ} ${PDB} ${SEQUENCE} 0.5 15 . > IPCAS.log
+    
+    echo ""
+    cat IPCAS/result
+    mv IPCAS.log IPCAS/Summary/
+    
+    if [ "$(ls -A IPCAS/Summary/)" ]; then
+        cp IPCAS/Summary/Free_*.mtz SUMMARY/IPCAS.mtz
+        cp IPCAS/Summary/Free_*.pdb SUMMARY/IPCAS.pdb
+        cp IPCAS/Summary/IPCAS.log SUMMARY/
+    else
+        echo "IPCAS.pdb does not exist."
+    fi
+fi
+
+#Calculate and echo timing information
 end_time=$(date +%s)
 total_time=$((end_time - start_time))
-
 hours=$((total_time / 3600))
 minutes=$(( (total_time % 3600) / 60 ))
 seconds=$((total_time % 60))

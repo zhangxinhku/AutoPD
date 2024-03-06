@@ -1,5 +1,13 @@
-#Input variables
+#!/bin/bash
+#############################################################################################################
+# Script Name: xds_xia2.sh
+# Description: This script is used for xia2-3d/3dii.
+# Author: ZHANG Xin
+# Date Created: 2023-06-01
+# Last Modified: 2024-03-05
+#############################################################################################################
 
+#Input variables
 for arg in "$@"; do
     IFS="=" read -r key value <<< "$arg"
     case $key in
@@ -27,10 +35,12 @@ case "${FLAG_XDS_XIA2}" in
         ;;
 esac
 
+#Create folder for xia2-dials
 cd XDS_XIA2
 mkdir -p XDS_XIA2_${ROUND}
 cd XDS_XIA2_${ROUND}
 
+#Optional parameters
 args=()
 
 for param in "goniometer.axes=${ROTATION_AXIS}" "xia2.settings.space_group=${SPACE_GROUP}" "xia2.settings.unit_cell=${UNIT_CELL_CONSTANTS}"; do
@@ -39,6 +49,7 @@ for param in "goniometer.axes=${ROTATION_AXIS}" "xia2.settings.space_group=${SPA
 done
 
 #XDS_XIA2 processing
+#Try running xia2 pipeline=3d first
 mkdir xia2_3d
 cd xia2_3d
 mode=3d
@@ -110,7 +121,7 @@ beam_center_refined=$(grep "DETECTOR COORDINATES (PIXELS) OF DIRECT BEAM" XDS_XI
 echo "Beam_center_refined         [pixel] = ${beam_center_refined}" >> XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log
 ${SOURCE_DIR}/dr_log.sh XDS_XIA2_${ROUND}/xia2_${mode}/LogFiles/AUTOMATIC_DEFAULT_aimless.log XDS_XIA2_${ROUND}/xia2_${mode}/LogFiles/AUTOMATIC_DEFAULT_ctruncate.log >> XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log
 
-#Output Rmerge
+#Extract Rmerge Resolution Space group Point group
 Rmerge_XDS_XIA2=$(grep 'Rmerge  (all I+ and I-)' XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | awk '{print $6}')
 Resolution_XDS_XIA2=$(grep 'High resolution limit' XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | awk '{print $4}')
 SG_XDS_XIA2=$(grep 'Space group:' XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')

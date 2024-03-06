@@ -1,7 +1,18 @@
+#!/bin/bash
+#############################################################################################################
+# Script Name: header.sh
+# Description: This script is used for generating header information for data reduction log files.
+# Author: ZHANG Xin
+# Date Created: 2023-06-01
+# Last Modified: 2024-03-05
+#############################################################################################################
+
 #Input variables
 DATAPATH=${1}
 file_type=${2}
+
 #file_name=$(find ${DATAPATH} -type f -name "*master.h5" -printf "%f")
+#Use dials.import to show header information of diffraction data
 case "${file_type}" in
   "h5")
     file_name=$(find "${DATAPATH}" -maxdepth 1 -type f ! -name '.*' -name "*master.h5" -printf "%f")
@@ -12,6 +23,8 @@ case "${file_type}" in
     ;;
 esac
 dials.show imported.expt > imported.txt
+
+#Extract key information from header information
 echo "============================================================================================="
 echo "                                       Data reduction                                        "
 echo "============================================================================================="

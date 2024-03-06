@@ -1,3 +1,12 @@
+#!/bin/bash
+#############################################################################################################
+# Script Name: plot.sh
+# Description: This script is used for plotting statistics figures.
+# Author: ZHANG Xin
+# Date Created: 2023-06-01
+# Last Modified: 2024-03-05
+#############################################################################################################
+
 #Input variables
 L_statistic=${1}
 

@@ -1,6 +1,17 @@
+#!/bin/bash
+#############################################################################################################
+# Script Name: dr_log.sh
+# Description: This script is used for generating data reduction log files.
+# Author: ZHANG Xin
+# Date Created: 2023-06-01
+# Last Modified: 2024-03-05
+#############################################################################################################
+
+#Input variables
 aimless=${1}
 ctruncate=${2}
 
+#Extract key information from aimless.log and ctruncate.log and generate log files
 echo ""
 echo "------------------------------------ Summary from AIMLESS -----------------------------------"
 echo ""

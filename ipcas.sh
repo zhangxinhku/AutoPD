@@ -48,7 +48,7 @@ then
 fi
 mkdir $out_dir
 
-${scr_dir}/ipcas_mtz.sh ${1} ${1} F SIGF FreeR_flag
+${scr_dir}/ipcas_mtz.sh ${1} ${1} FP SIGFP FREE #F SIGF FreeR_flag
 
 # run cycle
 num=1
@@ -105,6 +105,6 @@ then
     mins=$(($mins % 60))
 fi
 secs=$(($duration % 60))
-echo "Total time: $hours h $mins m $secs s" >> $out_dir/result
+echo "IPCAS took: $hours h $mins m $secs s" >> $out_dir/result
 
-mv IPCAS.log $out_dir
+mv IPCAS.log $out_dir/Summary

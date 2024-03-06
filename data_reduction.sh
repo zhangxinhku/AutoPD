@@ -1,4 +1,12 @@
 #!/bin/bash
+#############################################################################################################
+# Script Name: data_reduction.sh
+# Description: This script is used for data reduction.
+# Author: ZHANG Xin
+# Date Created: 2023-06-01
+# Last Modified: 2024-03-05
+#############################################################################################################
+
 start_time=$(date +%s)
 
 #Input variables
@@ -12,6 +20,7 @@ FILE_TYPE=$(find "${DATA_PATH}" -maxdepth 1 -type f ! -name '.*' | head -n 1 | a
 #Create and enter folder for data reduction
 mkdir -p DATA_REDUCTION
 cd DATA_REDUCTION
+mkdir -p DATA_REDUCTION_SUMMARY
 
 #Extract header information
 ${SOURCE_DIR}/header.sh ${DATA_PATH} ${FILE_TYPE} > header.log
@@ -23,6 +32,7 @@ echo ""
 ROUND=1
 parallel -u ::: "${SOURCE_DIR}/xds.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE}" "${SOURCE_DIR}/xds_xia2.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE}" "${SOURCE_DIR}/dials_xia2.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE}" "${SOURCE_DIR}/autoproc.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE}"
 
+#Set Flags
 FLAG_XDS=$(grep 'FLAG_XDS=' temp.txt | cut -d '=' -f 2)
 FLAG_XDS_XIA2=$(grep 'FLAG_XDS_XIA2=' temp.txt | cut -d '=' -f 2)
 FLAG_DIALS_XIA2=$(grep 'FLAG_DIALS_XIA2=' temp.txt | cut -d '=' -f 2)
@@ -37,7 +47,7 @@ SPACE_GROUP=$(grep 'Space group:' ${BEST_1}/${BEST_1}_SUMMARY/${BEST_1}_SUMMARY.
 UNIT_CELL_CONSTANTS=$(grep 'Unit cell:' ${BEST_1}/${BEST_1}_SUMMARY/${BEST_1}_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ *$//g' | sed 's/  */,/g')
 UNIT_CELL=$(grep 'Unit cell:' ${BEST_1}/${BEST_1}_SUMMARY/${BEST_1}_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ *$//g' | sed 's/  */ /g')
 
-
+#For second round input
 if [ "${SPACE_GROUP}" == "P2122" ] || [ "${SPACE_GROUP}" == "P2212" ]; then
     SPACE_GROUP="P2221"
 fi
@@ -60,6 +70,7 @@ echo ""
 echo "           Resolution   Rmerge   I/Sigma   CC(1/2)   Completeness   Multiplicity   Space group                           Cell"
 echo ""
 
+#XDS results
 if [ -f "XDS/XDS_SUMMARY/XDS_SUMMARY.log" ]; then
     XDS_resolution=$(grep 'High resolution limit' XDS/XDS_SUMMARY/XDS_SUMMARY.log | awk '{print $4}')
     XDS_rmerge=$(grep 'Rmerge  (all I+ and I-)' XDS/XDS_SUMMARY/XDS_SUMMARY.log | awk '{print $6}')
@@ -73,6 +84,7 @@ if [ -f "XDS/XDS_SUMMARY/XDS_SUMMARY.log" ]; then
     echo ""
 fi
 
+#xia2-3d/3dii results
 if [ -f "XDS_XIA2/XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log" ]; then
     XDS_XIA2_resolution=$(grep 'High resolution limit' XDS_XIA2/XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | awk '{print $4}')
     XDS_XIA2_rmerge=$(grep 'Rmerge  (all I+ and I-)' XDS_XIA2/XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | awk '{print $6}')
@@ -86,6 +98,7 @@ if [ -f "XDS_XIA2/XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log" ]; then
     echo ""
 fi
 
+#xia2-dials results
 if [ -f "DIALS_XIA2/DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log" ]; then
     DIALS_XIA2_resolution=$(grep 'High resolution limit' DIALS_XIA2/DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log | awk '{print $4}')
     DIALS_XIA2_rmerge=$(grep 'Rmerge  (all I+ and I-)' DIALS_XIA2/DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log | awk '{print $6}')
@@ -99,6 +112,7 @@ if [ -f "DIALS_XIA2/DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log" ]; then
     echo ""
 fi
 
+#autoPROC results
 if [ -f "autoPROC/autoPROC_SUMMARY/autoPROC_SUMMARY.log" ]; then
     autoPROC_resolution=$(grep 'High resolution limit' autoPROC/autoPROC_SUMMARY/autoPROC_SUMMARY.log | awk '{print $4}')
     autoPROC_rmerge=$(grep 'Rmerge  (all I+ and I-)' autoPROC/autoPROC_SUMMARY/autoPROC_SUMMARY.log | awk '{print $6}')
@@ -112,9 +126,7 @@ if [ -f "autoPROC/autoPROC_SUMMARY/autoPROC_SUMMARY.log" ]; then
     echo ""
 fi
 
-#Output best results
-mkdir -p DATA_REDUCTION_SUMMARY
-
+#Determine output results: result with lowest Rmerge and results with different point groups
 sort -k2,2n temp1.txt > sorted.txt
 read -r best_rmerge best_point_group < <(awk 'NR==1 {print $1, $4}' sorted.txt)
 
@@ -146,18 +158,18 @@ for name in "${names[@]}"; do
 done
 
 rm sorted.txt
-#cp DATA_REDUCTION_SUMMARY/* ../SUMMARY
 rm *.*
+
+#Calculate and echo timing information
+end_time=$(date +%s)
+total_time=$((end_time - start_time))
+hours=$((total_time / 3600))
+minutes=$(( (total_time % 3600) / 60 ))
+seconds=$((total_time % 60))
+echo "Data reduction took: ${hours}h ${minutes}m ${seconds}s" | tee DATA_REDUCTION.log
+echo ""
 
 #Go to data processing folder
 cd ..
 mv DATA_REDUCTION.log DATA_REDUCTION/DATA_REDUCTION_SUMMARY
 cp DATA_REDUCTION/DATA_REDUCTION_SUMMARY/DATA_REDUCTION.log SUMMARY
-end_time=$(date +%s)
-total_time=$((end_time - start_time))
-
-hours=$((total_time / 3600))
-minutes=$(( (total_time % 3600) / 60 ))
-seconds=$((total_time % 60))
-echo "Data reduction took: ${hours}h ${minutes}m ${seconds}s" 
-echo ""
