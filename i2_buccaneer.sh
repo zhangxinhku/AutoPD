@@ -24,7 +24,7 @@ do
 done < "${SEQ_FILE}"
 
 #Determine ASU contents
-i2run ProvideAsuContents \
+$CCP4/lib/python3.7/site-packages/ccp4i2/bin/i2run ProvideAsuContents \
 	--ASU_CONTENT \
                    sequence=${sequence} \
 	           nCopies=1 \
@@ -34,7 +34,7 @@ i2run ProvideAsuContents \
 ASU=$(readlink -f ASUCONTENTFILE.asu.xml)
 
 #CCP4i2 Buccaneer
-i2run buccaneer_build_refine_mr \
+$CCP4/lib/python3.7/site-packages/ccp4i2/bin/i2run buccaneer_build_refine_mr \
 	--F_SIGF \
 		fullPath=${MTZ} \
 		columnLabels="/*/*/[F,SIGF]" \
