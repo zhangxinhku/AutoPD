@@ -25,7 +25,6 @@ To enable these software packages for bash users, add the following lines to you
 ```
 #CCP4
 source <path>/ccp4-8.0/bin/ccp4.setup-sh
-export PATH=<path>/ccp4-8.0/lib/python3.7/site-packages/ccp4i2/bin/:$PATH
 #Phenix
 source <path>/phenix-1.21-5207/phenix_env.sh
 #XDS
