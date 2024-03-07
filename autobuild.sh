@@ -48,7 +48,7 @@ hours=$((total_time / 3600))
 minutes=$(( (total_time % 3600) / 60 ))
 seconds=$((total_time % 60))
 
-echo "" | tee -a AUTOBUILD.log
+echo "" | tee -a AUTOBUILD_SUMMARY/AUTOBUILD.log
 echo "Phenix.autobuild took: ${hours}h ${minutes}m ${seconds}s" | tee -a AUTOBUILD_SUMMARY/AUTOBUILD.log
 
 #Go to data processing folder
