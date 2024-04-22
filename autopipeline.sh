@@ -21,6 +21,7 @@ ROTATION_AXIS=""
 OUT_DIR="AutoPD_processed"
 DATE=""
 Z=""
+ATOM=""
 
 for arg in "$@"; do
   if [[ "$arg" == *=* ]]; then
@@ -36,6 +37,7 @@ for arg in "$@"; do
       out_dir) OUT_DIR="$value";;                #Output folder name
       mp_date) DATE="$value";;                   #The homologs released after this date will be excluded from the result of MrParse, for data testing.
       z) Z="$value";;                            #The number of copies in an asymmetric unit
+      atom) ATOM="$value";;                      #The atom type of anomalous scattering
       *) echo "Invalid parameter: $arg" >&2; exit 1;;
     esac
   else
@@ -59,7 +61,7 @@ fi
 
 mkdir -p ${OUT_DIR}
 cd ${OUT_DIR}
-mkdir -p SEARCH_MODELS SUMMARY INPUT_FILES
+mkdir -p SUMMARY INPUT_FILES
 
 #Input check
 if [ -z "${DATA_PATH}" ]; then
@@ -104,7 +106,8 @@ elif [ ! -e "${MR_TEMPLATE_PATH}" ]; then
     echo "MR template path does not exist."
 else
     cp ${MR_TEMPLATE_PATH}/*.pdb INPUT_FILES
-    rm -f SEARCH_MODELS/*.pdb
+    rm -rf SEARCH_MODELS
+    mkdir -p SEARCH_MODELS
    
     i=1
     # Loop through each .pdb file
@@ -116,6 +119,13 @@ else
     done 
     echo "Molecular replacement templates were input. MrParse will be skipped."
     echo "MR template path: ${MR_TEMPLATE_PATH}"
+    MP="false"
+fi
+
+if [ -z "${ATOM}" ]; then
+    SAD="false"
+else
+    SAD="true"
     MP="false"
 fi
 
@@ -149,14 +159,34 @@ if [ -z "$(find DATA_REDUCTION/DATA_REDUCTION_SUMMARY -maxdepth 1 -type f -name 
     exit 1
 fi
 
+#SAD
+echo ""
+echo "============================================================================================="
+echo "                                             SAD                                             "
+echo "============================================================================================="
+
+if [ "${SAD}" = "true" ]; then
+    ${scr_dir}/sad.sh ${MTZ_IN} ${SEQUENCE} ${ATOM} ${scr_dir}
+    
+    #Calculate and echo timing information
+    end_time=$(date +%s)
+    total_time=$((end_time - start_time))
+    hours=$((total_time / 3600))
+    minutes=$(( (total_time % 3600) / 60 ))
+    seconds=$((total_time % 60))
+    echo "Total time: ${hours}h ${minutes}m ${seconds}s"
+    exit
+fi
+
+#MR
+
 if [ -z "$(find SEARCH_MODELS -maxdepth 1 -type f -name '*.pdb')" ]; then
-    echo "ERROR: No pdb files found."
+    echo "ERROR: No search model found."
     exit 1
 else
     cp SEARCH_MODELS/* SUMMARY/
 fi
 
-#MR
 echo ""
 echo "============================================================================================="
 echo "                                    Molecular Replacement                                    "
@@ -184,6 +214,8 @@ if [ -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ]; then
     cp BUCCANEER/BUCCANEER_SUMMARY/* SUMMARY/
     num=$(grep 'Best R-free' BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.log | awk '{print $NF}')
     r_free=$(grep 'R-work:' "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.log" 2>/dev/null | sort -k4,4n | head -1 | awk '{print $4}')
+    name=$(find "PHASER_MR/MR_${num}" -type f -name "*.mtz" ! -name "PAHSER.1.mtz" -exec basename {} \; | sed 's/\.mtz$//' | head -n 1)
+    cp DATA_REDUCTION/DATA_REDUCTION_SUMMARY/${name}_SUMMARY.log
     cp PHASER_MR/MR_${num}/*.mtz SUMMARY/ 2>/dev/null
     cp PHASER_MR/MR_${num}/*.pdb SUMMARY/
     cp PHASER_MR/MR_${num}/*.log SUMMARY/
@@ -209,23 +241,24 @@ if [ ! -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ] || [ "$(echo "${r_free} 
     else
         echo "AUTOBUILD.pdb does not exist."
     fi
-fi
-
-#IPCAS
-if [ ! -f "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" ] || [ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ]; then
-     echo "IPCAS 2.0 will be performed."
-    ${scr_dir}/ipcas.sh ${MTZ} ${PDB} ${SEQUENCE} 0.5 15 . > IPCAS.log
     
-    echo ""
-    cat IPCAS/result
-    mv IPCAS.log IPCAS/Summary/
+    #IPCAS
+    if [ ! -f "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" ] || [ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ]; then
+        echo ""
+        echo "IPCAS 2.0 will be performed."
+        ${scr_dir}/ipcas.sh ${MTZ} ${PDB} ${SEQUENCE} 0.5 15 . > IPCAS.log
     
-    if [ "$(ls -A IPCAS/Summary/)" ]; then
-        cp IPCAS/Summary/Free_*.mtz SUMMARY/IPCAS.mtz
-        cp IPCAS/Summary/Free_*.pdb SUMMARY/IPCAS.pdb
-        cp IPCAS/Summary/IPCAS.log SUMMARY/
-    else
-        echo "IPCAS.pdb does not exist."
+        echo ""
+        cat IPCAS/result
+        mv IPCAS.log IPCAS/Summary/
+    
+        if [ "$(ls -A IPCAS/Summary/)" ]; then
+            cp IPCAS/Summary/Free_*.mtz SUMMARY/IPCAS.mtz
+            cp IPCAS/Summary/Free_*.pdb SUMMARY/IPCAS.pdb
+            cp IPCAS/Summary/IPCAS.log SUMMARY/
+        else
+            echo "IPCAS.pdb does not exist."
+        fi
     fi
 fi
 

@@ -131,9 +131,13 @@ PointGroup_XDS_XIA2=$(${SOURCE_DIR}/sg2pg.sh ${SG_XDS_XIA2})
 if [ "${Rmerge_XDS_XIA2}" = "" ];then
     FLAG_XDS_XIA2=0
     echo "Round ${ROUND} XDS_XIA2 processing failed!"
+    rm XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log
+    exit
 elif [ $(echo "${Rmerge_XDS_XIA2} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_XDS_XIA2} >= 2" | bc) -eq 1 ];then
     FLAG_XDS_XIA2=0
     echo "Round ${ROUND} XDS_XIA2 processing failed!"
+    rm XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log
+    exit
 else
     FLAG_XDS_XIA2=1
     echo "Round ${ROUND} XDS_XIA2 processing succeeded!"

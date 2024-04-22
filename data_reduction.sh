@@ -166,7 +166,7 @@ total_time=$((end_time - start_time))
 hours=$((total_time / 3600))
 minutes=$(( (total_time % 3600) / 60 ))
 seconds=$((total_time % 60))
-echo "Data reduction took: ${hours}h ${minutes}m ${seconds}s" | tee DATA_REDUCTION.log
+echo "Data reduction took: ${hours}h ${minutes}m ${seconds}s"
 echo ""
 
 #Go to data processing folder

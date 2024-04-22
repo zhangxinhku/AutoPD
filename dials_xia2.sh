@@ -131,9 +131,13 @@ PointGroup_DIALS_XIA2=$(${SOURCE_DIR}/sg2pg.sh ${SG_DIALS_XIA2})
 if [ "${Rmerge_DIALS_XIA2}" = "" ];then
     FLAG_DIALS_XIA2=0
     echo "Round ${ROUND} DIALS_XIA2 processing failed!"
+    rm DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log
+    exit
 elif [ $(echo "${Rmerge_DIALS_XIA2} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_DIALS_XIA2} >= 2" | bc) -eq 1 ];then
     FLAG_DIALS_XIA2=0
     echo "Round ${ROUND} DIALS_XIA2 processing failed!"
+    rm DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log
+    exit
 else
     FLAG_DIALS_XIA2=1
     echo "Round ${ROUND} DIALS_XIA2 processing succeeded!"

@@ -133,6 +133,8 @@ echo "" >> XDS_${ROUND}.log
 
 #2_INIT
 sed -i 's/JOB=.*$/JOB= INIT/g' XDS.INP
+#Set the number of processors to be used
+#sed -i '3iMAXIMUM_NUMBER_OF_PROCESSORS=24' XDS.INP
 xds > INIT.log
 cp XDS.INP INIT.INP
 cp INIT.INP 2_INIT.INP
@@ -143,8 +145,9 @@ echo "" >> XDS_${ROUND}.log
 
 #3_COLSPOT Set SPOT_RANGE=DATA_RANGE
 sed -i 's/JOB=.*$/JOB= COLSPOT/g' XDS.INP
-DATA_RANGE=$(grep 'DATA_RANGE=' XDS.INP | cut -d '=' -f 2)
-sed -i "s/SPOT_RANGE=.*$/SPOT_RANGE=${DATA_RANGE}/g" XDS.INP
+#sed -i 's/MAXIMUM_NUMBER_OF_PROCESSORS=.*$/!MAXIMUM_NUMBER_OF_PROCESSORS=24/g' XDS.INP
+#DATA_RANGE=$(grep 'DATA_RANGE=' XDS.INP | cut -d '=' -f 2)
+#sed -i "s/SPOT_RANGE=.*$/SPOT_RANGE=${DATA_RANGE}/g" XDS.INP
 xds_par > COLSPOT.log
 cp XDS.INP COLSPOT.INP
 cp COLSPOT.INP 3_COLSPOT.INP
@@ -155,7 +158,7 @@ echo "" >> XDS_${ROUND}.log
 
 #4_IDXREF
 sed -i 's/JOB=.*$/JOB= IDXREF/g' XDS.INP
-sed -i 's/REFINE(IDXREF)=.*$/REFINE(IDXREF)= POSITION CELL BEAM ORIENTATION AXIS/g' XDS.INP
+#sed -i 's/REFINE(IDXREF)=.*$/REFINE(IDXREF)= POSITION CELL BEAM ORIENTATION AXIS/g' XDS.INP
 xds_par > IDXREF.log
 cp XDS.INP IDXREF.INP
 cp IDXREF.INP 4_IDXREF.INP
@@ -173,7 +176,7 @@ cp XPARM.XDS 4_XPARM.XDS
 cat IDXREF.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
-if grep -q "!!! ERROR !!!" "XDS_${ROUND}.log"; then
+if grep -q "!!! ERROR !!!" "XDS_${ROUND}.log" && ! grep -q "!!! ERROR !!! INSUFFICIENT PERCENTAGE (< 50%) OF INDEXED REFLECTIONS" "XDS_${ROUND}.log"; then
     FLAG_XDS=0
     echo "FLAG_XDS=${FLAG_XDS}" >> ../../temp.txt
     echo "Round ${ROUND} XDS processing failed!"
@@ -182,15 +185,15 @@ fi
 
 #5_DEFPIX Update UNTRUSTED_ELLIPSE ORGX ORGY DETECTOR_DISTANCE ROTATION_AXIS INCIDENT_BEAM_DIRECTION
 sed -i 's/JOB=.*$/JOB= DEFPIX/g' XDS.INP
-ORGX=$(awk 'NR == 9 {print $1}' 4_XPARM.XDS)
-ORGY=$(awk 'NR == 9 {print $2}' 4_XPARM.XDS)
-sed -i "s/ORGX=.*$/ORGX= ${ORGX} ORGY= ${ORGY}/g" XDS.INP
-DETECTOR_DISTANCE=$(awk 'NR == 9 {print $3}' 4_XPARM.XDS)
-sed -i "s/DETECTOR_DISTANCE=.*$/DETECTOR_DISTANCE= ${DETECTOR_DISTANCE}/g" XDS.INP
-ROTATION_AXIS=$(awk 'NR == 2 {print $4, $5, $6}' 4_XPARM.XDS)
-sed -i "s/ROTATION_AXIS=.*$/ROTATION_AXIS= ${ROTATION_AXIS}/g" XDS.INP
-INCIDENT_BEAM_DIRECTION=$(awk 'NR == 3 {print $2, $3, $4}' 4_XPARM.XDS)
-sed -i "s/INCIDENT_BEAM_DIRECTION=.*$/INCIDENT_BEAM_DIRECTION= ${INCIDENT_BEAM_DIRECTION}/g" XDS.INP
+#ORGX=$(awk 'NR == 9 {print $1}' 4_XPARM.XDS)
+#ORGY=$(awk 'NR == 9 {print $2}' 4_XPARM.XDS)
+#sed -i "s/ORGX=.*$/ORGX= ${ORGX} ORGY= ${ORGY}/g" XDS.INP
+#DETECTOR_DISTANCE=$(awk 'NR == 9 {print $3}' 4_XPARM.XDS)
+#sed -i "s/DETECTOR_DISTANCE=.*$/DETECTOR_DISTANCE= ${DETECTOR_DISTANCE}/g" XDS.INP
+#ROTATION_AXIS=$(awk 'NR == 2 {print $4, $5, $6}' 4_XPARM.XDS)
+#sed -i "s/ROTATION_AXIS=.*$/ROTATION_AXIS= ${ROTATION_AXIS}/g" XDS.INP
+#INCIDENT_BEAM_DIRECTION=$(awk 'NR == 3 {print $2, $3, $4}' 4_XPARM.XDS)
+#sed -i "s/INCIDENT_BEAM_DIRECTION=.*$/INCIDENT_BEAM_DIRECTION= ${INCIDENT_BEAM_DIRECTION}/g" XDS.INP
 xds > DEFPIX.log
 cp XDS.INP DEFPIX.INP
 cp DEFPIX.INP 5_DEFPIX.INP
@@ -200,8 +203,12 @@ cat DEFPIX.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
 #6_INTEGRATE
+#SPACE_GROUP_NUMBER=$(awk 'NR == 4 {print $1}' 4_XPARM.XDS)
+#UNIT_CELL_CONSTANTS=$(awk 'NR == 4 {print $2, $3, $4, $5, $6, $7}' 4_XPARM.XDS)
+#sed -i "s/SPACE_GROUP_NUMBER=.*$/SPACE_GROUP_NUMBER=${SPACE_GROUP_NUMBER}/g" XDS.INP
+#ssed -i "s/UNIT_CELL_CONSTANTS=.*$/UNIT_CELL_CONSTANTS=${UNIT_CELL_CONSTANTS}/g" XDS.INP
 sed -i 's/JOB=.*$/JOB= INTEGRATE/g' XDS.INP
-sed -i 's/REFINE(INTEGRATE)=.*$/REFINE(INTEGRATE)= POSITION CELL BEAM ORIENTATION/g' XDS.INP
+#sed -i 's/REFINE(INTEGRATE)=.*$/REFINE(INTEGRATE)= POSITION CELL BEAM ORIENTATION/g' XDS.INP
 
 MAX_RUN_TIME=20m
 timeout $MAX_RUN_TIME xds_par -par NUMBER_OF_FORKED_INTEGRATE_JOBS=2 > INTEGRATE.log
@@ -223,7 +230,7 @@ echo "" >> XDS_${ROUND}.log
 
 #7_CORRECT
 sed -i 's/JOB=.*$/JOB= CORRECT/g' XDS.INP
-sed -i 's/! STRICT_ABSORPTION_CORRECTION=.*$/STRICT_ABSORPTION_CORRECTION=TRUE/g' XDS.INP
+#sed -i 's/! STRICT_ABSORPTION_CORRECTION=.*$/STRICT_ABSORPTION_CORRECTION=TRUE/g' XDS.INP
 xds_par > CORRECT.log
 cp XDS.INP CORRECT.INP
 cp CORRECT.INP 7_CORRECT.INP
@@ -316,7 +323,7 @@ cat pointless.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
 #14_aimless
-aimless hklin pointless.mtz hklout XDS.mtz xmlout aimless.xml scalepack XDS.sca > aimless.log << EOF
+aimless hklin pointless.mtz hklout XDS.mtz xmlout aimless.xml scalepack XDS.sca > aimless.log 2> error.log << EOF
 RUN 1 ALL
 BINS 20
 ANOMALOUS ON
@@ -415,9 +422,13 @@ PointGroup_XDS=$(${SOURCE_DIR}/sg2pg.sh ${SG_XDS})
 if [ "${Rmerge_XDS}" = "" ];then
     FLAG_XDS=0
     echo "Round ${ROUND} XDS processing failed!"
+    rm XDS_SUMMARY/XDS_SUMMARY.log
+    exit
 elif [ $(echo "${Rmerge_XDS} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_XDS} >= 2" | bc) -eq 1 ];then
     FLAG_XDS=0
     echo "Round ${ROUND} XDS processing failed!"
+    rm XDS_SUMMARY/XDS_SUMMARY.log
+    exit
 else
     FLAG_XDS=1
     echo "Round ${ROUND} XDS processing succeeded!"

@@ -48,9 +48,9 @@ done
 #autoPROC processing
 if [ "${FILE_TYPE}" = "h5" ]; then
     file_name=$(find "${DATA_PATH}" -maxdepth 1 -type f ! -name '.*' -name "*master.h5" -printf "%f")
-    process -h5 ${DATA_PATH}/${file_name} -d autoPROC_${ROUND} ${args[@]} > autoPROC_${ROUND}.log
+    process -ANO -h5 ${DATA_PATH}/${file_name} -d autoPROC_${ROUND} ${args[@]} > autoPROC_${ROUND}.log
 else
-    process -I ${DATA_PATH} -d autoPROC_${ROUND} "${args[@]}" > autoPROC_${ROUND}.log
+    process -ANO -I ${DATA_PATH} -d autoPROC_${ROUND} "${args[@]}" > autoPROC_${ROUND}.log
 fi
 
 if [ ! -f "autoPROC_${ROUND}/truncate-unique.mtz" ]; then
@@ -84,9 +84,13 @@ PointGroup_autoPROC=$(${SOURCE_DIR}/sg2pg.sh ${SG_autoPROC})
 if [ "${Rmerge_autoPROC}" = "" ];then
     FLAG_autoPROC=0
     echo "Round ${ROUND} autoPROC processing failed!"
+    rm autoPROC_SUMMARY/autoPROC_SUMMARY.log
+    exit
 elif [ $(echo "${Rmerge_autoPROC} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_autoPROC} >= 2" | bc) -eq 1 ];then
     FLAG_autoPROC=0
     echo "Round ${ROUND} autoPROC processing failed!"
+    rm autoPROC_SUMMARY/autoPROC_SUMMARY.log
+    exit
 else
     FLAG_autoPROC=1
     echo "Round ${ROUND} autoPROC processing succeeded!"
