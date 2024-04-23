@@ -100,14 +100,20 @@ else
     DR="false"
 fi
 
+if [ -z "${ATOM}" ]; then
+    SAD="false"
+    mkdir -p SEARCH_MODELS
+else
+    SAD="true"
+    MP="false"
+fi
+
 if [ -z "${MR_TEMPLATE_PATH}" ]; then
     echo "No molecular replacement template was input."
 elif [ ! -e "${MR_TEMPLATE_PATH}" ]; then
     echo "MR template path does not exist."
 else
     cp ${MR_TEMPLATE_PATH}/*.pdb INPUT_FILES
-    rm -rf SEARCH_MODELS
-    mkdir -p SEARCH_MODELS
    
     i=1
     # Loop through each .pdb file
@@ -119,13 +125,6 @@ else
     done 
     echo "Molecular replacement templates were input. MrParse will be skipped."
     echo "MR template path: ${MR_TEMPLATE_PATH}"
-    MP="false"
-fi
-
-if [ -z "${ATOM}" ]; then
-    SAD="false"
-else
-    SAD="true"
     MP="false"
 fi
 
@@ -214,8 +213,8 @@ if [ -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ]; then
     cp BUCCANEER/BUCCANEER_SUMMARY/* SUMMARY/
     num=$(grep 'Best R-free' BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.log | awk '{print $NF}')
     r_free=$(grep 'R-work:' "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.log" 2>/dev/null | sort -k4,4n | head -1 | awk '{print $4}')
-    name=$(find "PHASER_MR/MR_${num}" -type f -name "*.mtz" ! -name "PAHSER.1.mtz" -exec basename {} \; | sed 's/\.mtz$//' | head -n 1)
-    cp DATA_REDUCTION/DATA_REDUCTION_SUMMARY/${name}_SUMMARY.log
+    name=$(find "PHASER_MR/MR_${num}" -type f -name "*.mtz" ! -name "PHASER.1.mtz" -exec basename {} \; | sed 's/\.mtz$//' | head -n 1)
+    cp DATA_REDUCTION/DATA_REDUCTION_SUMMARY/${name}_SUMMARY.log SUMMARY/
     cp PHASER_MR/MR_${num}/*.mtz SUMMARY/ 2>/dev/null
     cp PHASER_MR/MR_${num}/*.pdb SUMMARY/
     cp PHASER_MR/MR_${num}/*.log SUMMARY/
