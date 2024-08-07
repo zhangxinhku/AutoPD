@@ -86,13 +86,13 @@ run_xia2_with_timeout() {
 }
 
 # Try running xia2 pipeline=3d with timeout
-if ! run_xia2_with_timeout "3d" 1800 || [ ! -f "DataFiles/AUTOMATIC_DEFAULT_free.mtz" ]; then
+if ! run_xia2_with_timeout "3d" 3600 || [ ! -f "DataFiles/AUTOMATIC_DEFAULT_free.mtz" ]; then
     # If 3d fails or times out, attempt to run 3dii
     cd ..
     mkdir -p xia2_3dii
     cd xia2_3dii
     mode=3dii
-    if ! run_xia2_with_timeout "3dii" 1800; then
+    if ! run_xia2_with_timeout "3dii" 3600; then
         echo "Round ${ROUND} XDS_XIA2 processing failed!"
         exit 1 # Exit if 3dii also fails or times out
     fi
@@ -126,6 +126,7 @@ Rmerge_XDS_XIA2=$(grep 'Rmerge  (all I+ and I-)' XDS_XIA2_SUMMARY/XDS_XIA2_SUMMA
 Resolution_XDS_XIA2=$(grep 'High resolution limit' XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | awk '{print $4}')
 SG_XDS_XIA2=$(grep 'Space group:' XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')
 PointGroup_XDS_XIA2=$(${SOURCE_DIR}/sg2pg.sh ${SG_XDS_XIA2})
+Completeness_XDS_XIA2=$(grep 'Completeness' XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | awk '{print $2}')
 
 #Determine running successful or failed using Rmerge 
 if [ "${Rmerge_XDS_XIA2}" = "" ];then
@@ -141,7 +142,7 @@ elif [ $(echo "${Rmerge_XDS_XIA2} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_XDS_
 else
     FLAG_XDS_XIA2=1
     echo "Round ${ROUND} XDS_XIA2 processing succeeded!"
-    echo "XDS_XIA2 ${Rmerge_XDS_XIA2} ${Resolution_XDS_XIA2} ${PointGroup_XDS_XIA2}" >> ../temp1.txt
+    echo "XDS_XIA2 ${Rmerge_XDS_XIA2} ${Resolution_XDS_XIA2} ${PointGroup_XDS_XIA2} ${Completeness_XDS_XIA2}" >> ../temp1.txt
 fi
 
 #For invoking in autopipeline_parrallel.sh

@@ -52,7 +52,7 @@ for i in $(seq 0 $((${seq_count}-1))); do
     echo "No AF models were found."
   else
     cp models/*.pdb all_models
-    python ${scr_dir}/json_to_table.py af_models.json 
+    python3 ${scr_dir}/json_to_table.py af_models.json 
   fi
   
   if [ ! -d "homologs" ] || [ -z "$(ls -A homologs)" ]; then
@@ -62,7 +62,7 @@ for i in $(seq 0 $((${seq_count}-1))); do
     cp homologs/*.pdb all_models
     if ! grep -qE '^\s*\[\s*\]\s*$' homologs.json; then
       #The homologs.jason is not empty
-      python ${scr_dir}/json_to_table.py homologs.json ${DATE}
+      python3 ${scr_dir}/json_to_table.py homologs.json ${DATE}
     else
       #The homologs.jason is empty
       for file in "homologs"/*; do

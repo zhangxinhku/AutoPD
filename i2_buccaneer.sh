@@ -37,7 +37,7 @@ ASU=$(readlink -f ASUCONTENTFILE.asu.xml)
 $CCP4/lib/python3.7/site-packages/ccp4i2/bin/i2run buccaneer_build_refine_mr \
 	--F_SIGF \
 		fullPath=${MTZ} \
-		columnLabels="/*/*/[F,SIGF]" \
+		columnLabels="/*/*/[FP,SIGFP]" \
 	--FREERFLAG \
 		fullPath=${MTZ} \
 		columnLabels="/*/*/[FreeR_flag]" \

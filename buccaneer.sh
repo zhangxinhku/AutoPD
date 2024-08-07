@@ -41,7 +41,7 @@ do
     
     if [ -f "../../PHASER_MR/MR_SUMMARY/Phaser_${i}.mtz" ]; then
         MTZ=$(readlink -f "../../PHASER_MR/MR_SUMMARY/Phaser_${i}.mtz")
-    elif find ../../DATA_REDUCTION -type f -name '*.mtz' | read -r; then
+    elif [ -d "../../DATA_REDUCTION" ] && find ../../DATA_REDUCTION -type f -name '*.mtz' | read -r; then
         summary_dir=$(realpath ../../DATA_REDUCTION/DATA_REDUCTION_SUMMARY)
         mtz_files=($(ls "${summary_dir}"/*.mtz))
         MTZ=${mtz_files[$i-1]}

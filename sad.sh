@@ -42,6 +42,8 @@ for ((i=1; i<=num_mtz_files; i++)); do
   mtzdmp ${mtz_file} > mtzdmp.log
   WAVELENGTH=$(grep -A6 'wavelength' mtzdmp.log | tail -1 | awk '{print $1}')
   echo "Wavelength=${WAVELENGTH}"
+  
+  pip install gemmi > /dev/null
 
   # Run in background
   ${scr_dir}/crank2.sh ${mtz_file} ${SEQ} ${ATOM} ${WAVELENGTH} > crank2.log &

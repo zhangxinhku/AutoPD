@@ -22,6 +22,7 @@ OUT_DIR="AutoPD_processed"
 DATE=""
 Z=""
 ATOM=""
+SPACE_GROUP=""
 
 for arg in "$@"; do
   if [[ "$arg" == *=* ]]; then
@@ -36,8 +37,10 @@ for arg in "$@"; do
       rotation_axis) ROTATION_AXIS="$value";;    #Rotation axis, e.g. 1,0,0
       out_dir) OUT_DIR="$value";;                #Output folder name
       mp_date) DATE="$value";;                   #The homologs released after this date will be excluded from the result of MrParse, for data testing.
-      z) Z="$value";;                            #The number of copies in an asymmetric unit
+      z) Z="$value";;                            #The number of asymmetric unit copies 
       atom) ATOM="$value";;                      #The atom type of anomalous scattering
+      space_group) SPACE_GROUP="$value";;        #Space group
+      cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
       *) echo "Invalid parameter: $arg" >&2; exit 1;;
     esac
   else
@@ -143,9 +146,9 @@ elif [ "${DR}" = "false" ]; then
 elif [ "${MP}" = "false" ]; then
   echo ""
   echo "MrParse will be skipped."
-  ${scr_dir}/data_reduction.sh ${DATA_PATH} ${scr_dir} ${ROTATION_AXIS} | tee DATA_REDUCTION.log
+  ${scr_dir}/data_reduction.sh data_path=${DATA_PATH} source_dir=${scr_dir} rotation_axis=${ROTATION_AXIS} space_group=${SPACE_GROUP} | tee DATA_REDUCTION.log
 else    
-  parallel -u ::: "${scr_dir}/search_model.sh ${scr_dir} ${SEQUENCE} ${DATE} | tee SEARCH_MODEL.log" "${scr_dir}/data_reduction.sh ${DATA_PATH} ${scr_dir} ${ROTATION_AXIS} | tee DATA_REDUCTION.log"
+  parallel -u ::: "${scr_dir}/search_model.sh ${scr_dir} ${SEQUENCE} ${DATE} | tee SEARCH_MODEL.log" "${scr_dir}/data_reduction.sh data_path=${DATA_PATH} source_dir=${scr_dir} rotation_axis=${ROTATION_AXIS} space_group=${SPACE_GROUP} | tee DATA_REDUCTION.log"
 fi
 
 if [ ! -f "${SEQUENCE}" ]; then 
@@ -159,12 +162,13 @@ if [ -z "$(find DATA_REDUCTION/DATA_REDUCTION_SUMMARY -maxdepth 1 -type f -name 
 fi
 
 #SAD
-echo ""
-echo "============================================================================================="
-echo "                                             SAD                                             "
-echo "============================================================================================="
 
 if [ "${SAD}" = "true" ]; then
+    echo ""
+    echo "============================================================================================="
+    echo "                                             SAD                                             "
+    echo "============================================================================================="
+    
     ${scr_dir}/sad.sh ${MTZ_IN} ${SEQUENCE} ${ATOM} ${scr_dir}
     
     #Calculate and echo timing information
@@ -213,8 +217,10 @@ if [ -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ]; then
     cp BUCCANEER/BUCCANEER_SUMMARY/* SUMMARY/
     num=$(grep 'Best R-free' BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.log | awk '{print $NF}')
     r_free=$(grep 'R-work:' "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.log" 2>/dev/null | sort -k4,4n | head -1 | awk '{print $4}')
-    name=$(find "PHASER_MR/MR_${num}" -type f -name "*.mtz" ! -name "PHASER.1.mtz" -exec basename {} \; | sed 's/\.mtz$//' | head -n 1)
-    cp DATA_REDUCTION/DATA_REDUCTION_SUMMARY/${name}_SUMMARY.log SUMMARY/
+    if [ -d "DATA_REDUCTION" ]; then
+        name=$(find "PHASER_MR/MR_${num}" -type f -name "*.mtz" ! -name "PHASER.1.mtz" -exec basename {} \; | sed 's/\.mtz$//' | head -n 1)
+        cp DATA_REDUCTION/DATA_REDUCTION_SUMMARY/${name}_SUMMARY.log SUMMARY/
+    fi
     cp PHASER_MR/MR_${num}/*.mtz SUMMARY/ 2>/dev/null
     cp PHASER_MR/MR_${num}/*.pdb SUMMARY/
     cp PHASER_MR/MR_${num}/*.log SUMMARY/

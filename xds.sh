@@ -21,6 +21,7 @@ for arg in "$@"; do
         source_dir) SOURCE_DIR="$value" ;;
         file_type) FILE_TYPE="$value" ;;
         flag) FLAG_XDS="$value" ;;
+        sp) SPACE_GROUP="$value" ;;
         sp_number) SPACE_GROUP_NUMBER="$value" ;;
         cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
     esac
@@ -106,6 +107,7 @@ if [ -n "${ROTATION_AXIS}" ]; then
 fi
 
 #Space group and unit cell
+
 if [ -n "${SPACE_GROUP_NUMBER}" ]; then
     sed -i "s/SPACE_GROUP_NUMBER=.*$/SPACE_GROUP_NUMBER=${SPACE_GROUP_NUMBER}/g" XDS.INP
     sed -i "s/UNIT_CELL_CONSTANTS=.*$/UNIT_CELL_CONSTANTS=${UNIT_CELL_CONSTANTS}/g" XDS.INP
@@ -210,13 +212,13 @@ echo "" >> XDS_${ROUND}.log
 sed -i 's/JOB=.*$/JOB= INTEGRATE/g' XDS.INP
 #sed -i 's/REFINE(INTEGRATE)=.*$/REFINE(INTEGRATE)= POSITION CELL BEAM ORIENTATION/g' XDS.INP
 
-MAX_RUN_TIME=20m
+MAX_RUN_TIME=60m
 timeout $MAX_RUN_TIME xds_par -par NUMBER_OF_FORKED_INTEGRATE_JOBS=2 > INTEGRATE.log
 
 if [ $? -eq 124 ]; then
     FLAG_XDS=0
     echo "FLAG_XDS=${FLAG_XDS}" >> ../../temp.txt
-    echo "Round ${ROUND} XDS processing failed!"
+    echo "Timeout. Round ${ROUND} XDS processing failed!"
     exit 1
 fi
 
@@ -251,7 +253,12 @@ echo "" >> XDS_${ROUND}.log
 
 #8_IDXREF Update UNTRUSTED_ELLIPSE ORGX ORGY DETECTOR_DISTANCE ROTATION_AXIS INCIDENT_BEAM_DIRECTION SPACE_GROUP_NUMBER UNIT_CELL_CONSTANTS
 cp 4_IDXREF.INP XDS.INP
-SPACE_GROUP_NUMBER=$(awk 'NR == 4 {print $1}' 7_GXPARM.XDS)
+if [ -n "${SPACE_GROUP}" ]; then
+    SPACE_GROUP_NUMBER=$(${SOURCE_DIR}/get_sg_number.sh "${SPACE_GROUP}")
+    sed -i "s/SPACE_GROUP_NUMBER=.*$/SPACE_GROUP_NUMBER=${SPACE_GROUP_NUMBER}/g" XDS.INP
+else
+    SPACE_GROUP_NUMBER=$(awk 'NR == 4 {print $1}' 7_GXPARM.XDS)
+fi
 UNIT_CELL_CONSTANTS=$(awk 'NR == 4 {print $2, $3, $4, $5, $6, $7}' 7_GXPARM.XDS)
 sed -i "s/SPACE_GROUP_NUMBER=.*$/SPACE_GROUP_NUMBER=${SPACE_GROUP_NUMBER}/g" XDS.INP
 sed -i "s/UNIT_CELL_CONSTANTS=.*$/UNIT_CELL_CONSTANTS=${UNIT_CELL_CONSTANTS}/g" XDS.INP
@@ -286,7 +293,7 @@ echo "" >> XDS_${ROUND}.log
 
 #10_INTEGRATE
 sed -i 's/JOB=.*$/JOB= INTEGRATE/g' XDS.INP
-xds_par -par NUMBER_OF_FORKED_INTEGRATE_JOBS=2 > INTEGRATE.log
+xds_par -par NUMBER_OF_FORKED_INTEGRATE_JOBS=2 > INTEGRATE.log #
 cp XDS.INP INTEGRATE.INP
 cp INTEGRATE.INP 10_INTEGRATE.INP
 cp INTEGRATE.log 10_INTEGRATE.log
@@ -323,7 +330,8 @@ cat pointless.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
 #14_aimless
-aimless hklin pointless.mtz hklout XDS.mtz xmlout aimless.xml scalepack XDS.sca > aimless.log 2> error.log << EOF
+{
+aimless hklin pointless.mtz hklout XDS.mtz xmlout aimless.xml scalepack XDS.sca > aimless.log << EOF
 RUN 1 ALL
 BINS 20
 ANOMALOUS ON
@@ -333,6 +341,8 @@ SCALES CONSTANT
 OUTPUT MTZ MERGED UNMERGED
 OUTPUT SCALEPACK MERGED
 EOF
+} 2>/dev/null
+
 cp aimless.log 14_aimless.log
 cp aimless.xml 14_aimless.xml
 cat aimless.log >> XDS_${ROUND}.log
@@ -345,16 +355,17 @@ if [ ! -f "XDS_unmerged.mtz" ]; then
     exit 1
 fi
 
-
 #15_dials.estimate_resolution cc_half=0.3 misigma=2.0 completeness=0.85
 dials.estimate_resolution XDS_unmerged.mtz > /dev/null
 cp dials.estimate_resolution.log 15_dials.estimate_resolution.log
 cp dials.estimate_resolution.html 15_dials.estimate_resolution.html
 cat dials.estimate_resolution.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
-resolution=$(sed -n '4,7p' dials.estimate_resolution.log | awk '{print $NF}' | sort -nr | head -n 1)
+resolution=$(sed -n '4,7p' dials.estimate_resolution.log | awk '{if ($NF ~ /^[0-9.]+$/) print $NF; else print ""}' | sort -nr | head -n 1)
+resolution=${resolution:-0}
 
 #16_aimless
+{
 aimless hklin pointless.mtz hklout XDS.mtz xmlout aimless.xml scalepack XDS.sca > aimless.log << EOF
 RUN 1 ALL
 BINS 20
@@ -365,13 +376,18 @@ SCALES CONSTANT
 OUTPUT MTZ MERGED UNMERGED
 OUTPUT SCALEPACK MERGED
 EOF
+} 2>/dev/null
+
 cp aimless.log 16_aimless.log
 cp aimless.xml 16_aimless.xml
 cat aimless.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
 #17_ctruncate
-ctruncate -mtzin XDS.mtz -mtzout XDS_truncated.mtz -colin '/*/*/[IMEAN,SIGIMEAN]' -colano '/*/*/[I(+),SIGI(+),I(-),SIGI(-)]' > ctruncate.log 2>> error.log
+{
+ctruncate -mtzin XDS.mtz -mtzout XDS_truncated.mtz -colin '/*/*/[IMEAN,SIGIMEAN]' -colano '/*/*/[I(+),SIGI(+),I(-),SIGI(-)]' > ctruncate.log
+} 2>/dev/null
+
 cp ctruncate.log 17_ctruncate.log
 cat ctruncate.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
@@ -384,7 +400,7 @@ if [ ! -f "XDS_truncated.mtz" ]; then
 fi
 
 #18_freeR_flag
-freerflag hklin XDS_truncated.mtz hklout XDS_free.mtz > freeR_flag.log << EOF
+freerflag hklin XDS_truncated.mtz hklout XDS_free.mtz > freeR_flag.log 2>/dev/null << EOF
 FREERFRAC 0.05
 UNIQUE
 EOF
@@ -417,22 +433,23 @@ Rmerge_XDS=$(grep 'Rmerge  (all I+ and I-)' XDS_SUMMARY/XDS_SUMMARY.log | awk '{
 Resolution_XDS=$(grep 'High resolution limit' XDS_SUMMARY/XDS_SUMMARY.log | awk '{print $4}')
 SG_XDS=$(grep 'Space group:' XDS_SUMMARY/XDS_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')
 PointGroup_XDS=$(${SOURCE_DIR}/sg2pg.sh ${SG_XDS})
+Completeness_XDS=$(grep 'Completeness' XDS_SUMMARY/XDS_SUMMARY.log | awk '{print $2}')
 
 #Determine running successful or failed using Rmerge 
 if [ "${Rmerge_XDS}" = "" ];then
     FLAG_XDS=0
     echo "Round ${ROUND} XDS processing failed!"
-    rm XDS_SUMMARY/XDS_SUMMARY.log
+    mv XDS_SUMMARY/XDS_SUMMARY.log XDS_${ROUND}/XDS_SUMMARY.log
     exit
 elif [ $(echo "${Rmerge_XDS} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_XDS} >= 2" | bc) -eq 1 ];then
     FLAG_XDS=0
     echo "Round ${ROUND} XDS processing failed!"
-    rm XDS_SUMMARY/XDS_SUMMARY.log
+    mv XDS_SUMMARY/XDS_SUMMARY.log XDS_${ROUND}/XDS_SUMMARY.log
     exit
 else
     FLAG_XDS=1
     echo "Round ${ROUND} XDS processing succeeded!"
-    echo "XDS ${Rmerge_XDS} ${Resolution_XDS} ${PointGroup_XDS}" >> ../temp1.txt
+    echo "XDS ${Rmerge_XDS} ${Resolution_XDS} ${PointGroup_XDS} ${Completeness_XDS}" >> ../temp1.txt
 fi
 
 #For invoking in autopipeline_parrallel.sh

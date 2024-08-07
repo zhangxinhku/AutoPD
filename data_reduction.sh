@@ -10,9 +10,24 @@
 start_time=$(date +%s)
 
 #Input variables
-DATA_PATH=${1}
-SOURCE_DIR=${2}
-ROTATION_AXIS=${3}
+for arg in "$@"; do
+    IFS="=" read -r key value <<< "$arg"
+    case $key in
+        data_path) DATA_PATH="$value" ;;
+        rotation_axis) ROTATION_AXIS="$value" ;;
+        source_dir) SOURCE_DIR="$value" ;;
+        space_group) SPACE_GROUP="$value" ;;
+        cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
+    esac
+done
+
+#Optional parameters
+args=()
+
+for param in "rotation_axis=${ROTATION_AXIS}" "sp=${SPACE_GROUP}" "cell_constants=${UNIT_CELL_CONSTANTS}"; do
+    IFS="=" read -r key value <<< "$param"
+    [ -n "$value" ] && args+=("$key=$value")
+done
 
 #Determine file type
 FILE_TYPE=$(find "${DATA_PATH}" -maxdepth 1 -type f ! -name '.*' | head -n 1 | awk -F. '{if (NF>1) print $NF}')
@@ -30,7 +45,7 @@ echo ""
 echo "-------------------------------- First round data processing --------------------------------"
 echo ""
 ROUND=1
-parallel -u ::: "${SOURCE_DIR}/xds.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE}" "${SOURCE_DIR}/xds_xia2.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE}" "${SOURCE_DIR}/dials_xia2.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE}" "${SOURCE_DIR}/autoproc.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE}"
+parallel -u ::: "${SOURCE_DIR}/xds.sh data_path=${DATA_PATH} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} ${args[@]}" "${SOURCE_DIR}/xds_xia2.sh data_path=${DATA_PATH} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} ${args[@]}" "${SOURCE_DIR}/dials_xia2.sh data_path=${DATA_PATH} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} ${args[@]}" "${SOURCE_DIR}/autoproc.sh data_path=${DATA_PATH} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} ${args[@]}"
 
 #Set Flags
 FLAG_XDS=$(grep 'FLAG_XDS=' temp.txt | cut -d '=' -f 2)
@@ -127,7 +142,7 @@ if [ -f "autoPROC/autoPROC_SUMMARY/autoPROC_SUMMARY.log" ]; then
 fi
 
 #Determine output results: result with lowest Rmerge and results with different point groups
-sort -k2,2n temp1.txt > sorted.txt
+awk '$5 >= 80' temp1.txt | sort -k2,2n -k5,5nr > sorted.txt
 read -r best_rmerge best_point_group < <(awk 'NR==1 {print $1, $4}' sorted.txt)
 
 declare -a names

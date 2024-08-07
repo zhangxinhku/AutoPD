@@ -55,7 +55,7 @@ xia2 pipeline=dials ${DATA_PATH} hdf5_plugin=${SOURCE_DIR}/durin-plugin.so ${arg
 CMD_PID=$!
 
 # Initialize a counter for the timeout (3600 seconds for 1 hour)
-TIMEOUT=1800
+TIMEOUT=3600
 COUNTER=0
 
 # Loop to check both the file and the timeout
@@ -69,7 +69,8 @@ while kill -0 $CMD_PID 2> /dev/null; do
 
   # Break the loop if the command runs more than the timeout
   if [[ $COUNTER -ge $TIMEOUT ]]; then
-    echo "xia2 command timeout. Terminating the process. Round ${ROUND} DIALS_XIA2 processing failed!"
+    echo "Timeout: Round ${ROUND} DIALS_XIA2 command exceeded ${TIMEOUT} seconds."
+    echo "Round ${ROUND} DIALS_XIA2 processing failed!"
     kill $CMD_PID
     exit 1
   fi
@@ -126,6 +127,7 @@ Rmerge_DIALS_XIA2=$(grep 'Rmerge  (all I+ and I-)' DIALS_XIA2_SUMMARY/DIALS_XIA2
 Resolution_DIALS_XIA2=$(grep 'High resolution limit' DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log | awk '{print $4}')
 SG_DIALS_XIA2=$(grep 'Space group:' DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')
 PointGroup_DIALS_XIA2=$(${SOURCE_DIR}/sg2pg.sh ${SG_DIALS_XIA2})
+Completeness_DIALS_XIA2=$(grep 'Completeness' DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log | awk '{print $2}')
 
 #Determine running successful or failed using Rmerge 
 if [ "${Rmerge_DIALS_XIA2}" = "" ];then
@@ -141,7 +143,7 @@ elif [ $(echo "${Rmerge_DIALS_XIA2} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_DI
 else
     FLAG_DIALS_XIA2=1
     echo "Round ${ROUND} DIALS_XIA2 processing succeeded!"
-    echo "DIALS_XIA2 ${Rmerge_DIALS_XIA2} ${Resolution_DIALS_XIA2} ${PointGroup_DIALS_XIA2}" >> ../temp1.txt
+    echo "DIALS_XIA2 ${Rmerge_DIALS_XIA2} ${Resolution_DIALS_XIA2} ${PointGroup_DIALS_XIA2} ${Completeness_DIALS_XIA2}" >> ../temp1.txt
 fi
 
 #For invoking in autopipeline_parrallel.sh

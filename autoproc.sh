@@ -79,6 +79,7 @@ Rmerge_autoPROC=$(grep 'Rmerge  (all I+ and I-)' autoPROC_SUMMARY/autoPROC_SUMMA
 Resolution_autoPROC=$(grep 'High resolution limit' autoPROC_SUMMARY/autoPROC_SUMMARY.log | awk '{print $4}')
 SG_autoPROC=$(grep 'Space group:' autoPROC_SUMMARY/autoPROC_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')
 PointGroup_autoPROC=$(${SOURCE_DIR}/sg2pg.sh ${SG_autoPROC})
+Completeness_autoPROC=$(grep 'Completeness' autoPROC_SUMMARY/autoPROC_SUMMARY.log | awk '{print $2}')
 
 #Determine running successful or failed using Rmerge 
 if [ "${Rmerge_autoPROC}" = "" ];then
@@ -94,7 +95,7 @@ elif [ $(echo "${Rmerge_autoPROC} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_auto
 else
     FLAG_autoPROC=1
     echo "Round ${ROUND} autoPROC processing succeeded!"
-    echo "autoPROC ${Rmerge_autoPROC} ${Resolution_autoPROC} ${PointGroup_autoPROC}" >> ../temp1.txt
+    echo "autoPROC ${Rmerge_autoPROC} ${Resolution_autoPROC} ${PointGroup_autoPROC} ${Completeness_autoPROC}" >> ../temp1.txt
 fi
 
 #For invoking in autopipeline.sh

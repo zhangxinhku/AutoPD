@@ -63,7 +63,7 @@ for ((i=1; i<=num_mtz_files; i++)); do
     MODE CCA
     ROOT PHASER_CCA
     HKLIN ${mtz_file}
-    LABIN F=F SIGF=SIGF
+    LABIN F=FP SIGF=SIGFP
     COMPOSITION BY ASU
     COMPOSITION PROTEIN SEQ ${SEQUENCE} NUM 1
 eof
@@ -90,7 +90,7 @@ eof
 MODE MR_AUTO
 ROOT PHASER
 HKLIN ${mtz_file}
-LABIN F=F SIGF=SIGF
+LABIN F=FP SIGF=SIGFP
 SGALTERNATIVE SELECT ALL" > phaser_input.txt
 
   for ((j=1; j<=${TEMPLATE_NUMBER}; j++)); do
@@ -111,7 +111,7 @@ SGALTERNATIVE SELECT ALL" > phaser_input.txt
     echo "SEARCH ENSEMBLE ensemble${j} NUM ${Z_NUMBER}" >> phaser_input.txt
   done
 
-  (phaser < phaser_input.txt > phaser_mr.log) &
+  phaser < phaser_input.txt > phaser_mr.log &
 
   cd ..
   Z_NUMBER=""
