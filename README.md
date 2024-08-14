@@ -13,6 +13,14 @@ Downloads website: [https://xds.mr.mpg.de/html_doc/downloading.html](https://xds
 Downloads website: [https://dials.github.io/installation.html](https://dials.github.io/installation.html)
 ### autoPROC
 Downloads website: [https://www.globalphasing.com/autoproc/](https://www.globalphasing.com/autoproc/)
+### parallel
+```
+sudo apt install parallel
+```
+### gnuplot
+```
+sudo apt install gnuplot
+```
 ### IPCAS (optional)
 The installation package for IPCAS can be found on the main page. Follow these commands to install:
 ```
