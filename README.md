@@ -62,7 +62,11 @@ autopipeline.sh data_path=<path_to_diffraction_data> seq_file=<path_to_sequence>
 AutoPD supports optional parameters for enhanced flexibility:  
 - **mtz_file=<path_to_mtz_file>/data.mtz**:   Skips data reduction if provided.  
 - **pdb_path=<path_to_pdb_files>**:           Uses provided PDB files for MR, skipping search model generation.  
-- **rotation_axis=0,0,1**:                    Custom rotation axis for data reduction.  
+- **rotation_axis=0,0,1**:                    Custom rotation axis for data reduction.
+- **beam_x=1200 beam_y=1300**:                Custom beam center in pixels.
+- **z=1**:                                    The number of asymmetric unit copies.
+- **atom=se**:                                The atom type of anomalous scattering.
+- **space_group=P43212**:                     Space group.
 - **mp_date=yyyy-mm-dd**:                     Excludes homologs released after this date for MrParse, useful for data tests.  
 
 ## Note
