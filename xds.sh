@@ -6,7 +6,6 @@
 # Date Created: 2023-06-01
 # Last Modified: 2024-03-05
 #############################################################################################################
-
 shopt -s extglob
 
 start_time=$(date +%s)
@@ -15,11 +14,7 @@ start_time=$(date +%s)
 for arg in "$@"; do
     IFS="=" read -r key value <<< "$arg"
     case $key in
-        data_path) DATA_PATH="$value" ;;
-        rotation_axis) ROTATION_AXIS="$value" ;;
         round) ROUND="$value" ;;
-        source_dir) SOURCE_DIR="$value" ;;
-        file_type) FILE_TYPE="$value" ;;
         flag) FLAG_XDS="$value" ;;
         sp) SPACE_GROUP="$value" ;;
         sp_number) SPACE_GROUP_NUMBER="$value" ;;
@@ -100,6 +95,11 @@ if [ "${FILE_TYPE}" = "h5" ]; then
   sed -i "/NAME_TEMPLATE_OF_DATA_FRAMES/a LIB=${SOURCE_DIR}/durin-plugin.so" XDS.INP
 fi
 
+#Beam center
+if [ -n "${BEAM_X}" ]; then
+    sed -i "s/ORGX=.*$/ORGX= ${BEAM_X} ORGY= ${BEAM_Y}/g" XDS.INP
+fi
+
 #Rotation axis selection
 if [ -n "${ROTATION_AXIS}" ]; then
     ROTATION_AXIS="${ROTATION_AXIS//,/ }"
@@ -107,7 +107,6 @@ if [ -n "${ROTATION_AXIS}" ]; then
 fi
 
 #Space group and unit cell
-
 if [ -n "${SPACE_GROUP_NUMBER}" ]; then
     sed -i "s/SPACE_GROUP_NUMBER=.*$/SPACE_GROUP_NUMBER=${SPACE_GROUP_NUMBER}/g" XDS.INP
     sed -i "s/UNIT_CELL_CONSTANTS=.*$/UNIT_CELL_CONSTANTS=${UNIT_CELL_CONSTANTS}/g" XDS.INP

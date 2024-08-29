@@ -1,28 +1,27 @@
-
-#!/bin/bash                                                                   
-# purpose: generate XDS.INP                                                   
-#                                                                             
-# tested with some datasets from ALS, SSRL, SLS, ESRF, BESSY, SPring-8 and PF; only MAR, ADSC/SMV, PILATUS, Eiger, RAXIS (in-house), Bruker (PHOTON II) detectors; 
-# for other detectors, values marked with XXX must be manually filled in.                                  
-#                                                                                                          
-# revision 0.03 . Kay Diederichs 2/2010                                                                    
-# revision 0.04 . Kay Diederichs 4/2010 - include alternative ORGX, ORGY calculations for ADSC             
-# revision 0.05 . Kay Diederichs 5/2010 - grep for "Corrected" in addition to "marccd"; needed for BESSY   
-# revision 0.06 . KD 6/2010 - add UNTRUSTED_RECTANGLE and UNTRUSTED_ELLIPSE; use `whereis catmar` and so on 
-# revision 0.07 . KD 6/2010 - decide about ORGX/Y info in MAR header being pixels or mm; other fixes        
-# revision 0.08 . KD 6/2010 - fixes for Pilatus 6M                                                          
-# revision 0.09 . KD 6/2010 - get rid of requirement for mccd_xdsparams.pl and/or catmar; rather use "od"   
-# revision 0.10 . Tim Gruene 7/2010 - set link 'images' to image directory if path exceeds 72 characters    
-# revision 0.11 . KD 7/2010 - for MarCCD: look for distance info at different byte position                 
-# revision 0.12 . KD 7/2010 - fix for negative PHISTART                                                     
-# revision 0.13 . KD 8/2010 - store correct NX NY QX QY in XDS.INP                                          
-# revision 0.14 . KD 1/2011 - SENSOR_THICKNESS for Pilatus; MINIMUM_NUMBER_OF_PIXELS_IN_A_SPOT=3            
+#!/bin/bash
+# purpose: generate XDS.INP
+#
+# tested with some datasets from ALS, SSRL, SLS, ESRF, BESSY, SPring-8 and PF; only MAR, ADSC/SMV, PILATUS, Eiger, RAXIS (in-house), Bruker (PHOTON II) detectors;
+# for other detectors, values marked with XXX must be manually filled in.
+#
+# revision 0.03 . Kay Diederichs 2/2010
+# revision 0.04 . Kay Diederichs 4/2010 - include alternative ORGX, ORGY calculations for ADSC
+# revision 0.05 . Kay Diederichs 5/2010 - grep for "Corrected" in addition to "marccd"; needed for BESSY
+# revision 0.06 . KD 6/2010 - add UNTRUSTED_RECTANGLE and UNTRUSTED_ELLIPSE; use `whereis catmar` and so on
+# revision 0.07 . KD 6/2010 - decide about ORGX/Y info in MAR header being pixels or mm; other fixes
+# revision 0.08 . KD 6/2010 - fixes for Pilatus 6M
+# revision 0.09 . KD 6/2010 - get rid of requirement for mccd_xdsparams.pl and/or catmar; rather use "od"
+# revision 0.10 . Tim Gruene 7/2010 - set link 'images' to image directory if path exceeds 72 characters
+# revision 0.11 . KD 7/2010 - for MarCCD: look for distance info at different byte position
+# revision 0.12 . KD 7/2010 - fix for negative PHISTART
+# revision 0.13 . KD 8/2010 - store correct NX NY QX QY in XDS.INP
+# revision 0.14 . KD 1/2011 - SENSOR_THICKNESS for Pilatus; MINIMUM_NUMBER_OF_PIXELS_IN_A_SPOT=3
 # revision 0.15 . KD 2/2011 - add comment for -ive sign of APS 19-ID and Australian Synchrotron rotation axis
-# revision 0.16 . KD 3/2011 - SENSOR_THICKNESS=0.01 for ADSC and MarCCD. Add comment about SILICON=          
-# revision 0.17 . KD 3/2011 - make it work for .bz2 frames; improve screen output                            
-# revision 0.18 . KD 4/2011 - faster by doing "strings" only once; revert "images/${1##/*/}" "correction"    
-# revision 0.19 . KD 6/2011 - bugfix for 0.18                                                                
-# revision 0.20 . KD 7/2011 - redirect stderr of /bin/ls to /dev/null                                        
+# revision 0.16 . KD 3/2011 - SENSOR_THICKNESS=0.01 for ADSC and MarCCD. Add comment about SILICON=
+# revision 0.17 . KD 3/2011 - make it work for .bz2 frames; improve screen output
+# revision 0.18 . KD 4/2011 - faster by doing "strings" only once; revert "images/${1##/*/}" "correction"
+# revision 0.19 . KD 6/2011 - bugfix for 0.18
+# revision 0.20 . KD 7/2011 - redirect stderr of /bin/ls to /dev/null
 # revision 0.21 . KD 11/2011 - SEPMIN, CLUSTER_RADIUS hints; read NX NY from header (for Pilatus 2M)
 # revision 0.22 . KD 12/2011 - Pilatus 2M UNTRUSTED_RECTANGLE lines, SENSOR_THICKNESS from header
 # revision 0.23 . KD 1/2012 - add UNTRUSTED_QUADRILATERAL, remove MINIMUM_ZETA (0.05 is default now)
@@ -50,7 +49,7 @@
 # revision 0.45 . KD cope with blanks in filenames
 # revision 0.46 . Keitaro 6/2014 automatically set ROTATION_AXIS=-1 0 0 for Mar225 at SPring-8 BL26B2.
 # revision 0.47 . Keitaro 7/2014 more generic dTREK format support (Saturn and RAXIS)
-# revision 0.48 . Kip Guja 11/2014 add detector serial number for ALS 5.0.2 to beam center convention 1 
+# revision 0.48 . Kip Guja 11/2014 add detector serial number for ALS 5.0.2 to beam center convention 1
 # revision 0.49 . Nobuhisa 2/2015 add  detector serial number for AichiSR BL2S1 to beam center convention 1
 # revision 0.50 . KD 03/2015 workaround for Mar-1 change of parameter name "DISTANCE" to "POSITION" in REFINE(*) keywords
 # revision 0.51 . Keitaro 03/2015 add .gz and .xz support and remove limitation - frame numbers can start with any.
@@ -87,7 +86,7 @@
 # revision 0.81 . KD 21/02/2018 when encountering CBF files from Eiger (ESRF), treat as Pilatus detector
 # revision 0.82 . KD 01/03/2018 STARTING_ANGLE for MarCCD/Pilatus/PHOTON, enabling to use dials.rs_mapper with spot2pdb.
 # revision 0.83 . KD 25/06/2018 for ADSC detector #458 at APS BM19, revert the definition of ROTATION_AXIS=-1 0 0. See "Beamline notes" in this wiki.
-# revision 0.84 . KD 10/10/2018 implement Pilatus detector with d*TREK header 
+# revision 0.84 . KD 10/10/2018 implement Pilatus detector with d*TREK header
 # revision 0.85 . Jie Nan 09/01/2019 STARTING_ANGLE for Eiger
 # revision 0.86 . Keitaro 03/05/2019 Add PILATUS3 6M, S/N 60-0123 at SSRF BL18U-1 with ROTATION_AXIS=-1 0 0
 # revision 0.87 . KD 12/10/2019 Add PILATUS XXX, S/N XX-XXX at SSRF BL19U1 and MarCCD detector #43 at BL17B1 with ROTATION_AXIS=-1 0 0
@@ -97,7 +96,7 @@
 # revision 0.91 . KD 16/01/2020 Allow negative starting angle for Eiger (found -33 at SLS !).
 # revision 0.92 . KD 27/02/2020 read *_master.h5 from Diamond Light Source
 # revision 0.93 . KD 13/03/2020 print out 2theta for MarCCD (DETECTOR_*_AXIS can be derived from this)
-# revision 0.94 . KD 16/03/2020 bugfix for Bruker-cbf to make bc accept e.g. 3.1e-005 by using awk printf "%.5f" instead of awk print 
+# revision 0.94 . KD 16/03/2020 bugfix for Bruker-cbf to make bc accept e.g. 3.1e-005 by using awk printf "%.5f" instead of awk print
 # revision 0.95 . KD 29/07/2020 fix DLS Eiger HDF5 variant OSCILLATION_RANGE, STARTING_ANGLE. Attention: DLS Eiger variant needs h5dump 1.10 for OVERLOAD!
 # revision 0.96 . KD 03/10/2020 make script echo detector serial number if inverted ROTATION_AXIS is detected.
 # revision 0.97 . KD 19/10/2020 add UNTRUSTED_RECTANGLEs for Eiger2 (which has a few pixels less than Eiger (thanks to Andreas Förster)
@@ -105,9 +104,9 @@
 # revision 0.99 . Aaron Finke (CHESS) 07/11/2020 add ROTATION_AXIS=-1 0 0 for EIGER2 16M detector at MX beamline ID7B2 (CHESS)
 # revision 1.00 . Gleb Bourenkov 10/11/2020 add ROTATION_AXIS=0 -1 0 for beamline P14 (EMBL Hamburg) detectors Eiger 16M S/N E-32-0107; previously Eiger 4M S/N E-08-0107 and PILATUS 6M-F, S/N 60-0115-F
 # revision 1.01 . KD 07/12/2020 ROTATION_AXIS=0 -1 0 for Pilatus3 2M, S/N 24-0118 at ID23-2 (http://www.globalphasing.com/autoproc/wiki/index.cgi?BeamlineSettings)
-# revision 1.02 . KD 11/01/2021 recognize mar555 detector as mar345 (thanks to Thomas Hauß, HZB) 
+# revision 1.02 . KD 11/01/2021 recognize mar555 detector as mar345 (thanks to Thomas Hauß, HZB)
 # revision 1.03 . Feng Yu 18/7/2021 fix/expand information about Shanghai Synchrotron Radiation Facility (SSRF)
-# revision 1.04 . Zhipu Luo 13/08/2021 extract ORGX,ORGY for electron diffraction from SMV header if the wavelength value starts with 0.0 
+# revision 1.04 . Zhipu Luo 13/08/2021 extract ORGX,ORGY for electron diffraction from SMV header if the wavelength value starts with 0.0
 # revision 1.05 . KD specialcase extraction of number of images for BNL detectors E-32-0101 and E-18-0104
 # revision 1.06 . KD fix URLs in output. Availability of Apple M1 processor dectris-neggia-Apple-arm64.so . LC_ALL=C .
 # revision 1.07 . KD, Thomas Hauß, Gleb Bourenkov 25/10/2021. Detector moved from Petra P14 to P13
@@ -115,73 +114,94 @@
 # revision 1.09 . KD, Feng Yu 7/11/2021 fix detector number BNL E-18-0121 to be E-18-0104
 # revision 1.10 . KD NeXus header for Eiger
 # revision 1.11 . KD / Helena Taberman ROTATION_AXIS=-1 0 0 for Eiger .cbf data from Petra P14
-REVISION="1.11 (15-MAR-2022)"
+# revision 1.12 . KD / Helena Taberman correct rev 1.11 to be 0 -1 0
+# revision 1.13 . KD variables for /usr/local/lib64/dectris-neggia.so and durin-plugin.so . Remove h5dump error messages.
+# revision 1.14 . Juno Krahn 16/03/2023 Modified initial string header extraction; added exit to awk token extractions
+#                       Print help if multiple arguments (e.g. forgot quotes) or if neither '???' or master.h5
+#                       Set full path for frames; needed by some tools (e.g. show frame with predicted spots)
+#                       Comment out FRACTION_OF_POLARIZATION if wavelength is copper K-alpha
+#                       2-theta offset, rotation axis, starting angle, and flipping updated for all dtrek detectors
+#                       Untrusted rectangle for Saturn944
+#                       Environment variables to define alternate paths for dectris-neggia.so and durin-plugin.so
+#                       Append detector specific parameters from $HOME/.xds-site/${DET}_${DET_SN}
+#                       Cleaned up section for creating XDS.INP
+# revision 1.15 . KD 22/05/2023 fix bug with second argument leading to usage message. Updating links.
+# revision 1.16 . KD 26/05/2023 fix bug on Mac for Pilatus CBF missing two lines
+# revision 1.17 . JMK 31/05/2023 fix sed error for Mac, where \| is not supported
+# revision 1.18 . JMK 19/08/2023 Pilatus 12M support, give help msg if $5 defined (i.e. unquoted frame pattern)
+# revision 1.19 . KD 14/10/2023 Pilatus 12M at DLS I23 has reverse phi. Fix download commands.
+# revision 1.20 . KD 13/7/2024 Comment out line STRONG_PIXEL=4 in preparation for mid-2024 version of XDS.
+REVISION="1.20 (13-Jul-2024)"
 
-#                                                                                                            
-# usage: e.g. generate_XDS.INP "/file/system/frms/mydata_1_???.img"                                                       
-# make sure to have the two quotation marks !                                                                
-# the ? are wildcards for the frame numbers.                                                                 
-#                                                                                                            
-# known problems:                                                                                            
-# revision 1.10 . KD implement NeXus for Eiger
+#
+# usage: e.g. generate_XDS.INP "/file/system/frms/mydata_1_???.img"
+# make sure to have the two quotation marks !
+# the ? are wildcards for the frame numbers.
+#
+# known problems:
 # - for ADSC detectors, there are at least three ways to obtain ORGX and ORGY values from the header (see below);
-# - the same might be a problem for MAR headers, too (not sure about this) 
-# - on Mac OS X, the Xcode command line tools (from https://developer.apple.com/download/more/) are needed.                            
-#                                                                                                                
-# notes for debugging of the script:                                                                             
-# - add the -x option to #!/bin/bash in first line, to see where an error occurs                                            
-# - comment out the removal of tmp1 and tmp2 in the last line                                                    
-#                                                                                                                
-# ====== Start of script ======                                                                                  
-echo generate_XDS.INP version $REVISION . Obtain the latest version from                                         
-echo http://strucbio.biologie.uni-konstanz.de/xdswiki/index.php/generate_XDS.INP                                 
-if [ "$1" == "help" ] || [ "$1" == "-help" ] || [ "$1" == "-h" ]; then                                           
-  echo usage: generate_XDS.INP \"/file/system/frms/mydata_1_???.img\"   \(_with_ the quotation marks!\)                       
-  echo if the frames are compressed with bzip2, leave out the .bz2 extension!                                    
-  exit                                                                                                           
-fi                                                                                                               
+# - the same might be a problem for MAR headers, too (not sure about this)
+# - on macOS, the "Command Line Tools for Xcode" (from https://developer.apple.com/download/more/) are needed.
+#
+# notes for debugging of the script:
+# - add the -x option to #!/bin/bash in first line, to see where an error occurs
+# - comment out the removal of tmp1 and tmp2 in the last line
+#
+# ====== Start of script ======
+echo generate_XDS.INP version $REVISION. Obtain the latest version from
+echo http://wiki.uni-konstanz.de/xds/index.php/generate_XDS.INP
+if [ "$1" == "help" ] || [ "$1" == "-help" ] || [ "$1" == "-h" ] || [ "$1" == "" ] || [ "$5" != "" ] || ! [[ "$1" =~ \?\?|_master\.h5 ]]; then
+  echo usage: generate_XDS.INP \"/file/system/frms/mydata_1_???.img\"   \(_with_ the quotation marks!\)
+  echo If the frames are compressed leave out the extension .bz2, .gz, or .xz!
+  echo for .h5 files: generate_XDS.INP /file/system/frms/mydata_1_master.h5
+  exit
+fi
 # make sure the locale does not interfere with e.g. awk calculations:
-LC_ALL="C";export LC_ALL
-#                                                                                                                
-# defaults:                                                                                                      
-#       
+export LC_ALL="C"
+#
+# defaults:
+#
 # conversion radian / degrees:
 DEGTOR=57.2957795
-                                                                                                         
-DETECTOR="XXX MINIMUM_VALID_PIXEL_VALUE=XXX OVERLOAD=XXX"                                                        
+
+DETECTOR="XXX MINIMUM_VALID_PIXEL_VALUE=XXX OVERLOAD=XXX"
 REVERSE_PHI="no"
-ORGX=XXX                                                                                                         
-ORGY=XXX                                                                                                         
-DETECTOR_DISTANCE=XXX                                                                                            
-OSCILLATION_RANGE=XXX                                                                                            
-X_RAY_WAVELENGTH=XXX                                                                                             
-QX=XXX                                                                                                           
-QY=XXX                                                                                                           
-NX=XXX                                                                                                           
-NY=XXX                                                                                                           
-SENSOR_THICKNESS=0   
-TRUSTED_REGION="0.0 1.2 ! partially use corners of detector (0 1.4143: use all pixels)"                                                                                           
+ORGX=XXX
+ORGY=XXX
+DETECTOR_DISTANCE=XXX
+OSCILLATION_RANGE=XXX
+X_RAY_WAVELENGTH=XXX
+QX=XXX
+QY=XXX
+NX=XXX
+NY=XXX
+SENSOR_THICKNESS=0
+TRUSTED_REGION="0.0 1.2 ! partially use corners of detector (0 1.4143: use all pixels)"
 # default MINIMUM_NUMBER_OF_PIXELS_IN_A_SPOT
-MNOPIAS=3 
+MNOPIAS=3
 # default DIRECTION_OF_DETECTOR_X-AXIS
 DIRECTION_OF_DETECTOR_X_AXIS="1 0 0"
 # default DIRECTION_OF_DETECTOR_Y-AXIS
 DIRECTION_OF_DETECTOR_Y_AXIS="0 1 0"
 # default FRACTION_OF_POLARIZATION
 pol_frac=0.98
+# default POLARIZATION_PLANE_NORMAL
+POLARIZATION_PLANE_NORMAL="0 1 0"
 STARTING_ANGLE=0
 dtrek_det=""
 SEPMIN=7.0
 CLUSTER_RADIUS=3.5
 REFINE_CORRECT="CELL BEAM ORIENTATION AXIS POSITION ! Default is: refine everything"
 
-dname=`echo "$1" | xargs dirname`
+dname=$(dirname "$1")
+# Convert to full path (verify 'realpath' is available first)
+command -v realpath &> /dev/null && dname=$(realpath $dname)
 test "${dname}" == "" && dname="."
-bname=`echo "$1" | xargs basename`
-# see how we are called:                                                                                         
+bname=$(basename "$1")
+# see how we are called:
 NAME_TEMPLATE_OF_DATA_FRAMES="${dname}/${bname}"
 # list frames matching the wildcards in NAME_TEMPLATE_OF_DATA_FRAMES
-# don't accept the "direct beam" shot at SLS/Pilatus PX-I and PX-II 
+# don't accept the "direct beam" shot at SLS/Pilatus PX-I and PX-II
 # cope with blanks in directory / file name
 IFS=$'\n'
 find -H $dname -maxdepth 1 -name "$bname" -or -name "${bname}.bz2" -or -name "${bname}.gz" -or -name "${bname}.xz" | egrep -v "_00000.cbf|_000.img" | sort > tmp1
@@ -204,10 +224,10 @@ else
  data_last=`cut -b $pos1-$pos2 tmp1 | tail -n1 | bc`
  DATA_RANGE="$data_first $data_last"
  echo DATA_RANGE=$DATA_RANGE
- 
+
  # set SPOT_RANGE to first half of DATA_RANGE
  data_num=`wc -l tmp1 | awk '{print $1}'`
- data_half=`echo "scale=0; $data_num/2" | bc -l`                        
+ data_half=`echo "scale=0; $data_num/2" | bc -l`
  data_half=`echo "if ($data_half<=1) 1;if ($data_half>1) $data_half" | bc -l`
  spot_last=`echo "scale=0; $data_first+$data_half-1" | bc -l`
  SPOT_RANGE="$data_first $spot_last"
@@ -217,8 +237,8 @@ FIRSTFRAME=`head -1 tmp1`
 echo $FIRSTFRAME | grep "\.h5$" && is_h5=1 || is_h5=0
 
 # find out detector type
-DET=XXX              
-IFS=$'\n'    
+DET=XXX
+IFS=$'\n'
 echo $FIRSTFRAME | grep -q '\.bz2$' && bzcat $FIRSTFRAME > tmp1 && FIRSTFRAME=tmp1
 # for mac/linux compatibility. zcat foo.gz doesn't work on mac.
 echo $FIRSTFRAME | grep -q '\.gz$' && zcat < $FIRSTFRAME > tmp1 && FIRSTFRAME=tmp1
@@ -226,44 +246,45 @@ echo $FIRSTFRAME | grep -q '\.xz$' && xzcat $FIRSTFRAME > tmp1 && FIRSTFRAME=tmp
 
 unset IFS
 if [ "$is_h5" == 0 ]; then
- strings $FIRSTFRAME > tmp2   
+ # extract strings from binary file header, removing leading '#' (Pilatus) and trailing ';' (CBF)
+ strings $FIRSTFRAME | head -400 | sed 's/^ *#//;s/; *$//;' >tmp2
  # TODO: whenever FIRSTFRAME is used below, it should be copied to tmp2 (using IFS as above), and tmp2 should be used instead
  # this was done for "mccd", but still has to be done for the "raxis" detector types
- # the reason is that FIRSTFRAME may contain a blank, which makes some commands fail                                                
- egrep -qi 'marccd|Corrected' tmp2 && DET=mccd                                 
- grep -q PILATUS tmp2             && DET=pilatus 
- grep -iq Eiger tmp2              && DET=pilatus                             
+ # the reason is that FIRSTFRAME may contain a blank, which makes some commands fail
+ egrep -qi 'marccd|Corrected' tmp2 && DET=mccd
+ grep -q PILATUS tmp2             && DET=pilatus
+ grep -iq Eiger tmp2              && DET=pilatus
  head -n1 tmp2 | grep -q "^RAXIS" && DET=raxis
  head -n1 tmp2 | grep -q "^R-AXIS" && DET=raxis
  grep -q "^SOURCE_WAVELENGTH= *1" tmp2 && DET=dtrek
- grep -q BEAM_CENTER_X tmp2       && DET=adsc                                 
+ grep -q BEAM_CENTER_X tmp2       && DET=adsc
  grep -q mar345 tmp2		 && DET=MAR345
  # rev. 1.02: in one case, mar555 data could be processed pretending it is mar345, so:
  grep -q mar555 tmp2		 && DET=MAR345
- grep -q BRUKER tmp2 && grep -q CBF tmp2  && DET=Bruker-cbf   
- grep -q CMOS1 tmp2 && DET=adsc-CMOS1   
- grep -q MARCONTROL tmp2 && DET=OLDMAR  
- grep -q "WAVELENGTH=0.0" tmp2 && DET=experimental-ED                                     
+ grep -q BRUKER tmp2 && grep -q CBF tmp2  && DET=Bruker-cbf
+ grep -q CMOS1 tmp2 && DET=adsc-CMOS1
+ grep -q MARCONTROL tmp2 && DET=OLDMAR
+ grep -q "WAVELENGTH=0.0" tmp2 && DET=experimental-ED
 else
  h5dump -d "/entry/instrument/detector/description" $FIRSTFRAME | grep -i Eiger > /dev/null && DET=eiger
 fi
 
-# identify other detector types in the same way 
+# identify other detector types in the same way
 
 # parse ASCII header of first frame
 
 if [ "$DET" == "XXX" ]; then
-  echo "this is not a MAR, ADSC/SMV or PILATUS detector - fill in XXX values manually!"
-  DETECTOR="XXX MINIMUM_VALID_PIXEL_VALUE=XXX OVERLOAD=XXX"                            
+  echo "Detector type unknown -- fill in XXX values manually!"
+  DETECTOR="XXX MINIMUM_VALID_PIXEL_VALUE=XXX OVERLOAD=XXX"
 
 # find parameters of first frame
-elif [ "$DET" == "mccd" ]; then 
+elif [ "$DET" == "mccd" ]; then
   echo Data from a MarCCD detector
 # http://www.sb.fsu.edu/~xray/Manuals/marCCD165header.html has header information
-                                  
+
   DETECTOR="CCDCHESS MINIMUM_VALID_PIXEL_VALUE= 1 OVERLOAD= 65500"
-  SENSOR_THICKNESS=0.01                                           
-  # use first frame of dataset to obtain parameters               
+  SENSOR_THICKNESS=0.01
+  # use first frame of dataset to obtain parameters
 
   # Check detector serial number and recognize beamline for reversed-phi setting.
   # Known detectors for reversed-phi in SPring-8: 24: BL26B2 Mar225, 31: BL32XU MX225HE, 38: BL44XU MX225HE, 42: BL44XU MX300HE, 40: BL41XU MX225HE, 106: BL32XU MX225HS
@@ -288,14 +309,14 @@ elif [ "$DET" == "mccd" ]; then
   IFS=$'\n'
   cp $FIRSTFRAME tmp2
   unset IFS
-  let SKIP=1024+80                                                        
+  let SKIP=1024+80
   NX=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')
-  let SKIP=$SKIP+4                                                                         
+  let SKIP=$SKIP+4
   NY=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')
 
   let SKIP=1720
   DETECTOR_DISTANCE=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')
-  DETECTOR_DISTANCE=`echo "scale=3; $DETECTOR_DISTANCE/1000" | bc -l`                                     
+  DETECTOR_DISTANCE=`echo "scale=3; $DETECTOR_DISTANCE/1000" | bc -l`
 
 # Mar 12, 2020 KD
   let SKIP=1724
@@ -304,17 +325,16 @@ elif [ "$DET" == "mccd" ]; then
   echo 2THETA= $TWOTHETA
 
   let SKIP=1024+256+128+256+44
-  STARTING_ANGLE=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}') 
+  STARTING_ANGLE=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')
   STARTING_ANGLE=`echo "scale=2; $STARTING_ANGLE/1000" | bc -l `
-  echo STARTING_ANGLE= $STARTING_ANGLE   
-                                                                                                       
-  let SKIP=1024+256+128+256+4                                                                             
-  ORGX=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')             
-  ORGX=`echo "scale=2; $ORGX/1000" | bc -l `                                                              
-  let SKIP=$SKIP+4                                                                                        
-  ORGY=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')             
-  ORGY=`echo "scale=2; $ORGY/1000" | bc -l `                                                              
-# fixed Aug 30, 2017 after IUCr2017 @ Hyderabad 
+
+  let SKIP=1024+256+128+256+4
+  ORGX=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')
+  ORGX=`echo "scale=2; $ORGX/1000" | bc -l `
+  let SKIP=$SKIP+4
+  ORGY=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')
+  ORGY=`echo "scale=2; $ORGY/1000" | bc -l `
+# fixed Aug 30, 2017 after IUCr2017 @ Hyderabad
   if [ "$DET_SN" == "4" ]; then
      TEMP=$ORGY
      ORGY=$ORGX
@@ -323,65 +343,63 @@ elif [ "$DET" == "mccd" ]; then
   fi
 
   let SKIP=1024+736
-  OSCILLATION_RANGE=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}') 
-  OSCILLATION_RANGE=`echo "scale=3; $OSCILLATION_RANGE/1000" | bc -l`   
-                                                                                                 
-  let SKIP=1024+256+128+256+128+4                                                                
-  QX=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')      
-  QX=`echo "scale=10; $QX/1000000" |bc -l `                                                      
-  let SKIP=$SKIP+4                                                                               
-  QY=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')      
-  QY=`echo "scale=10; $QY/1000000" |bc -l `                                                      
+  OSCILLATION_RANGE=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')
+  OSCILLATION_RANGE=`echo "scale=3; $OSCILLATION_RANGE/1000" | bc -l`
+
+  let SKIP=1024+256+128+256+128+4
+  QX=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')
+  QX=`echo "scale=10; $QX/1000000" |bc -l `
+  let SKIP=$SKIP+4
+  QY=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')
+  QY=`echo "scale=10; $QY/1000000" |bc -l `
 
   let SKIP=1024+256+128+256+128+128+12
   X_RAY_WAVELENGTH=$(od -t dI -j $SKIP -N 4 tmp2 | head -1 | awk '{print $2}')
-  X_RAY_WAVELENGTH=`echo "scale=5; $X_RAY_WAVELENGTH/100000" | bc -l`                                    
+  X_RAY_WAVELENGTH=`echo "scale=5; $X_RAY_WAVELENGTH/100000" | bc -l`
 
 # at most BLs, ORGX and ORGY are in pixels, but sometimes in mm ... guess:
-  NXBYFOUR=`echo "scale=0; $NX/4" | bc -l `                               
-  ORGXINT=`echo "scale=0; $ORGX/1" | bc -l `                              
-  if [ $ORGXINT -lt $NXBYFOUR ]; then                                     
-     ORGX=`echo "scale=1; $ORGX/$QX" | bc -l`                             
-     ORGY=`echo "scale=1; $ORGY/$QY" | bc -l`                             
+  NXBYFOUR=`echo "scale=0; $NX/4" | bc -l `
+  ORGXINT=`echo "scale=0; $ORGX/1" | bc -l `
+  if [ $ORGXINT -lt $NXBYFOUR ]; then
+     ORGX=`echo "scale=1; $ORGX/$QX" | bc -l`
+     ORGY=`echo "scale=1; $ORGY/$QY" | bc -l`
      echo MARCCD detector: header ORGX, ORGY seem to be in mm ... converting to pixels
-  else                                                                                
-     echo MARCCD detector: header ORGX, ORGY seem to be in pixel units                
-  fi                                                                                  
+  else
+     echo MARCCD detector: header ORGX, ORGY seem to be in pixel units
+  fi
 
 elif [ "$DET" == "adsc" ]; then
 
   DETECTOR="ADSC MINIMUM_VALID_PIXEL_VALUE= 1 OVERLOAD= 65000"
   echo Data from ADSC detector. Obtaining ORGX, ORGY depends on beamline setup:
-  SENSOR_THICKNESS=0.01                                                        
-  sed s/\;// tmp2 > tmp1                                                       
-  mv tmp1 tmp2                                                                 
+  SENSOR_THICKNESS=0.01
 
       # find X_RAY_WAVELENGTH:
       X_RAY_WAVELENGTH=`grep WAVELENGTH tmp2 | head -1 | sed s/WAVELENGTH=//`
 
       # find NX, QX, ORGX and ORGY:
       NX=`grep SIZE1 tmp2 | tail -1 | sed s/SIZE1=//`
-      NY=`grep SIZE2 tmp2 | tail -1 | sed s/SIZE2=//`                                             
+      NY=`grep SIZE2 tmp2 | tail -1 | sed s/SIZE2=//`
       QX=`grep PIXEL_SIZE tmp2 | sed s/PIXEL_SIZE=//`
-      QY=$QX                                               
+      QY=$QX
       BEAM_CENTER_X=`grep BEAM_CENTER_X tmp2 | sed s/BEAM_CENTER_X=//`
       BEAM_CENTER_Y=`grep BEAM_CENTER_Y tmp2 | sed s/BEAM_CENTER_Y=//`
- 
+
       COMMENT_ORGXY="
 ! Following are possible beam center interpretations for ADSC detectors"
-# at ESRF, PF, ALS 5.0.2, AS MX2 and ... (pls fill in!) the following should be used:         
+# at ESRF, PF, ALS 5.0.2, AS MX2 and ... (pls fill in!) the following should be used:
       ORGX1=`echo "scale=1; $BEAM_CENTER_Y/$QX" | bc -l`
       ORGY1=`echo "scale=1; $BEAM_CENTER_X/$QX" | bc -l`
-      echo - at ESRF, PF, ALS 8.2.1, APS Argonne BLs use: ORGX=$ORGX1 ORGY=$ORGY1                    
+      echo - at ESRF, PF, ALS 8.2.1, APS Argonne BLs use: ORGX=$ORGX1 ORGY=$ORGY1
       COMMENT_ORGXY="${COMMENT_ORGXY}
 ! ORGX= $ORGX1 ORGY= $ORGY1 ! For ESRF, PF, APS, AS MX2 ..."
 # this 2nd alternative convention should be used at the following beamlines (pls complete the list): ALS 5.0.3, ...
       ORGX2=`echo "scale=1; $NX-$BEAM_CENTER_X/$QX" | bc -l `
       ORGY2=`echo "scale=1; $BEAM_CENTER_Y/$QX" | bc -l `
-      echo - at e.g. ALS 5.0.3 use: ORGX=$ORGX2 ORGY=$ORGY2                                                          
+      echo - at e.g. ALS 5.0.3 use: ORGX=$ORGX2 ORGY=$ORGY2
       COMMENT_ORGXY="${COMMENT_ORGXY}
 ! ORGX= $ORGX2 ORGY= $ORGY2 ! For ALS 5.0.3,.."
-# this 3rd alternative convention should be used at the following beamlines (pls complete the list): ALS 8.2.2, ... 
+# this 3rd alternative convention should be used at the following beamlines (pls complete the list): ALS 8.2.2, ...
 # this alternative is written into the generated XDS.INP ! You have to correct this manually in XDS.INP, or adjust this script.
       ORGX3=`echo "scale=1; $BEAM_CENTER_X/$QX" | bc -l `
       ORGY3=`echo "scale=1; $NX-$BEAM_CENTER_Y/$QX" | bc -l `
@@ -391,7 +409,7 @@ elif [ "$DET" == "adsc" ]; then
 # this 4th alternative convention should be used at the following beamlines (pls complete the list): SPring-8, ...
       ORGX4=`echo "scale=1; $BEAM_CENTER_X/$QX" | bc -l `
       ORGY4=`echo "scale=1; $BEAM_CENTER_Y/$QX" | bc -l `
-      echo - at e.g. SPring-8 use: ORGX=$ORGX4 ORGY=$ORGY4 
+      echo - at e.g. SPring-8 use: ORGX=$ORGX4 ORGY=$ORGY4
       COMMENT_ORGXY="${COMMENT_ORGXY}
 ! ORGX= $ORGX4 ORGY= $ORGY4 ! For SPring-8,.."
 
@@ -443,41 +461,37 @@ elif [ "$DET" == "adsc" ]; then
         echo inverted ROTATION_AXIS since detector serial number is ${DET_SN}
       fi
 
-      # find DETECTOR_DISTANCE and OSCILLATION_RANGE:                                                                                
-      DETECTOR_DISTANCE=`grep ^DISTANCE tmp2 | sed s/DISTANCE=//`                                                                     
-      OSCILLATION_RANGE=`grep OSC_RANGE tmp2 | sed s/OSC_RANGE=//`       
-                                                            
+      # find DETECTOR_DISTANCE and OSCILLATION_RANGE:
+      DETECTOR_DISTANCE=`grep ^DISTANCE tmp2 | sed s/DISTANCE=//`
+      OSCILLATION_RANGE=`grep OSC_RANGE tmp2 | sed s/OSC_RANGE=//`
+
 elif [ "$DET" == "adsc-CMOS1" ]; then
   DETECTOR="ADSC MINIMUM_VALID_PIXEL_VALUE= 1 OVERLOAD= 65000"
   echo Data from CMOS1 MBC detector.
-  SENSOR_THICKNESS=0.01                                                        
-  sed s/\;// tmp2 > tmp1                                                       
-  mv tmp1 tmp2                                                                 
+  SENSOR_THICKNESS=0.01
   X_RAY_WAVELENGTH=`grep WAVELENGTH tmp2 | head -1 | sed s/WAVELENGTH=//`
   NX=`grep SIZE1 tmp2 | tail -1 | sed s/SIZE1=//`
   QX=`grep PIXEL_SIZE tmp2 | sed s/PIXEL_SIZE=//`
-  NY=`grep SIZE2 tmp2 | tail -1 | sed s/SIZE2=//`                                             
-  QY=$QX                                               
+  NY=`grep SIZE2 tmp2 | tail -1 | sed s/SIZE2=//`
+  QY=$QX
   ORGX=`grep BEAM_CENTER_X tmp2 | sed s/BEAM_CENTER_X=//`
   ORGY=`grep BEAM_CENTER_Y tmp2 | sed s/BEAM_CENTER_Y=//`
   REVERSE_PHI="yes"
-  DETECTOR_DISTANCE=`grep ^DISTANCE tmp2 | sed s/DISTANCE=/-/`                                                                     
-  OSCILLATION_RANGE=`grep OMEGA_DELTA tmp2 | sed s/OMEGA_DELTA=//`  
-  DETECTOR_X_AXIS="-1 0 0" 
-                                                                
+  DETECTOR_DISTANCE=`grep ^DISTANCE tmp2 | sed s/DISTANCE=/-/`
+  OSCILLATION_RANGE=`grep OMEGA_DELTA tmp2 | sed s/OMEGA_DELTA=//`
+  DETECTOR_X_AXIS="-1 0 0"
+
 elif [ "$DET" == "experimental-ED" ]; then
   DETECTOR="ADSC MINIMUM_VALID_PIXEL_VALUE= 1 OVERLOAD= 65000  ! OVERLOAD is really unknown "
   echo --- Electron diffraction data in SMV format!
-  SENSOR_THICKNESS=0.01                                                        
-  sed s/\;// tmp2 > tmp1                                                       
-  mv tmp1 tmp2                                                                 
+  SENSOR_THICKNESS=0.01
   X_RAY_WAVELENGTH=`grep WAVELENGTH tmp2 | head -1 | sed s/WAVELENGTH=//`
   NX=`grep SIZE1 tmp2 | tail -1 | sed s/SIZE1=//`
   QX=`grep PIXEL_SIZE tmp2 | sed s/PIXEL_SIZE=//`
-  NY=`grep SIZE2 tmp2 | tail -1 | sed s/SIZE2=//`                                             
-  QY=$QX  
+  NY=`grep SIZE2 tmp2 | tail -1 | sed s/SIZE2=//`
+  QY=$QX
   BEAM_CENTER_X=`grep BEAM_CENTER_X tmp2 | sed s/BEAM_CENTER_X=//`
-  BEAM_CENTER_Y=`grep BEAM_CENTER_Y tmp2 | sed s/BEAM_CENTER_Y=//` 
+  BEAM_CENTER_Y=`grep BEAM_CENTER_Y tmp2 | sed s/BEAM_CENTER_Y=//`
   QXY=`echo "scale=1; $QX*($BEAM_CENTER_X+$BEAM_CENTER_Y)" | bc -l`
       if [ "$QXY" "<" "$BEAM_CENTER_X" ] ; then
        ORGX=`echo "scale=2; $BEAM_CENTER_Y/$QX" | bc -l`
@@ -486,48 +500,45 @@ elif [ "$DET" == "experimental-ED" ]; then
        ORGX=`echo "scale=2; $BEAM_CENTER_X/1" | bc -l`
        ORGY=`echo "scale=2; $BEAM_CENTER_Y/1" | bc -l`
       fi
-  DETECTOR_DISTANCE=`grep ^DISTANCE tmp2 | sed s/DISTANCE=//`                                                                     
-  OSCILLATION_RANGE=`grep OSC_RANGE tmp2 | sed s/OSC_RANGE=//` 
-  STARTING_ANGLE=`grep OSC_START tmp2 | sed s/OSC_START=//` 
+  DETECTOR_DISTANCE=`grep ^DISTANCE tmp2 | sed s/DISTANCE=//`
+  OSCILLATION_RANGE=`grep OSC_RANGE tmp2 | sed s/OSC_RANGE=//`
+  STARTING_ANGLE=`grep OSC_START tmp2 | sed s/OSC_START=//`
   echo --- For TIMEPIX detector, please fix ROTATION_AXIS yourself!
-  DIRECTION_OF_DETECTOR_X_AXIS="1 0 0" 
+  DIRECTION_OF_DETECTOR_X_AXIS="1 0 0"
   REFINE_CORRECT="ORIENTATION CELL AXIS BEAM ! for ED, no POSITION when CELL is refined"
 
 elif [ "$DET" == "pilatus" ]; then
-  echo Data from a Pilatus detector                                         
-  sed s/#// tmp2 > tmp1                                                     
-  mv tmp1 tmp2                                                              
+  echo Data from a Pilatus detector
   OVERLOAD=1048574
   SEPMIN=4
   CLUSTER_RADIUS=2
-  grep -q Count_cutoff tmp2 && OVERLOAD=`awk '/Count_cutoff/{print $2}' tmp2`
+  grep -q Count_cutoff tmp2 && OVERLOAD=`awk '/Count_cutoff/{print $2;exit}' tmp2`
   DETECTOR="PILATUS MINIMUM_VALID_PIXEL_VALUE=0 OVERLOAD= $OVERLOAD  !PILATUS"
-  QX=0.172 QY=0.172                                                         
+  QX=0.172 QY=0.172
 # the default above guards against missing Pixel_size line in CBF header
-  grep -q Pixel_size tmp2 && QX=`awk '/Pixel_size/{print 1000*$2}' tmp2`
-  grep -q Pixel_size tmp2 && QY=`awk '/Pixel_size/{print 1000*$5}' tmp2`                                                     
+  grep -q Pixel_size tmp2 && QX=`awk '/Pixel_size/{print 1000*$2;exit}' tmp2`
+  grep -q Pixel_size tmp2 && QY=`awk '/Pixel_size/{print 1000*$5;exit}' tmp2`
 
       # find SENSOR_THICKNESS:
       SENSOR_THICKNESS=`grep thickness tmp2 | sed -e s/'Si.* sensor, thickness'// | awk '{print $1*1000}'`
-      # find X_RAY_WAVELENGTH:                                                                               
-      X_RAY_WAVELENGTH=`grep Wavelength tmp2 | sed -e s/Wavelength// -e s/A// | awk '{print $1}'`            
+      # find X_RAY_WAVELENGTH:
+      X_RAY_WAVELENGTH=`grep Wavelength tmp2 | sed -e s/Wavelength// -e s/A// | awk '{print $1}'`
 
       # find NX and NY; 2463/2527 is 6M, 1475/1679 is 2M
       NX=`grep X-Binary-Size-Fastest-Dimension tmp2 | awk '{print $2}'`
-      NY=`grep X-Binary-Size-Second-Dimension tmp2 | awk '{print $2}'` 
+      NY=`grep X-Binary-Size-Second-Dimension tmp2 | awk '{print $2}'`
 
       # find ORGX and ORGY:
       ORGX=`grep Beam_xy tmp2 | sed -e s/\(// -e s/\)// -e s/\,// | awk '{print $2}'`
       ORGY=`grep Beam_xy tmp2 | sed -e s/\(// -e s/\)// -e s/\,// | awk '{print $3}'`
 
       # find DETECTOR_DISTANCE, OSCILLATION_RANGE, and STARTING_ANGLE:
-      DETECTOR_DISTANCE=`awk '/Detector_distance/{print $2}' tmp2`
+      DETECTOR_DISTANCE=`awk '/Detector_distance/{print $2;exit}' tmp2`
       DETECTOR_DISTANCE=`echo "$DETECTOR_DISTANCE*1000" | bc -l`
 
-      OSCILLATION_RANGE=`awk '/Angle_increment/{print $2}' tmp2`
+      OSCILLATION_RANGE=`awk '/Angle_increment/{print $2;exit}' tmp2`
 
-      STARTING_ANGLE=`awk '/Start_angle/{print $2}' tmp2`
-      echo STARTING_ANGLE= $STARTING_ANGLE   
+      STARTING_ANGLE=`awk '/Start_angle/{print $2;exit}' tmp2`
 
       # get detector serial number and check if it is included in the list
       # Known detectors for reversed-phi in SPring-8: BL41XU PILATUS3 6M 60-0125
@@ -535,15 +546,15 @@ elif [ "$DET" == "pilatus" ]; then
       # Known detectors for reversed-phi at MX2 beamline (Brazilian Synchrotron National Laboratory - LNLS)
       # Known detectors for reversed-phi at CHESS F1 PILATUS3 6M, S/N 60-0127
       # Known detectors for reversed-phi at SSRF BL18U1 (S/N 60-0123) and BL19U1 (S/N XX-XXX) (!; 2019-10-19: staff will fix this)
-      # Known detectors for reversed-phi at Petra P14 (Eiger .cbf files)
       DET_SN=`grep "Detector:" tmp2 | sed "s/^.*Detector: *//"`
+      echo detector serial number is $DET_SN
       REVERSEPHI_SNs="
 PILATUS3 6M, S/N 60-0125
 PILATUS3 6M, S/N 60-0132
 PILATUS 2M, S/N 24-0109
 PILATUS3 6M, S/N 60-0127
 PILATUS3 6M, S/N 60-0123
-Dectris EIGER2 CdTe 16M, E-32-0129
+PILATUS 12M, S/N 120-0100
 "
       if echo "${DET_SN}${REVERSEPHI_SNs}" | sort | uniq -d | grep [0-9] > /dev/null; then
         REVERSE_PHI="yes"
@@ -553,17 +564,18 @@ Dectris EIGER2 CdTe 16M, E-32-0129
         REVERSE_PHI="yes"
         echo inverted rotation axis at SSRF BL19U1
       fi
-      
+
 # Diamond I24:
       if [ "$DET_SN" == "PILATUS3 6M, S/N 60-0119" ] ; then
         if grep -q "Oscillation_axis X.CW +SLOW" tmp2 ; then
-          rotation_axis="0 -1 0"
+          ROTATION_AXIS="0 -1 0"
           echo ROTATION_AXIS="0 -1 0" at Diamond I24
         fi
       fi
 # PETRA P14: raw data from Eiger are stored as CBF files so this is treated as Pilatus
-      if [ "$DET_SN" == "Dectris Eiger 4M, E-08-0107" -o "$DET_SN" == "PILATUS 6M-F, S/N 60-0115-F" ] ; then
-        rotation_axis="0 -1 0"
+      if [ "$DET_SN" == "Dectris Eiger 4M, E-08-0107" -o "$DET_SN" == "PILATUS 6M-F, S/N 60-0115-F" \
+                                        -o "$DET_SN" == "Dectris EIGER2 CdTe 16M, E-32-0129" ] ; then
+        ROTATION_AXIS="0 -1 0"
         echo ROTATION_AXIS="0 -1 0" at PETRA P14
       fi
 # similarly, Eiger 16M at PETRA P14 until May 22, 2021
@@ -572,13 +584,13 @@ Dectris EIGER2 CdTe 16M, E-32-0129
         if [ "$isatP13" == 1 ] ; then
           echo using the default ROTATION_AXIS=1 0 0 at PETRA P13
         else
-          rotation_axis="0 -1 0"
+          ROTATION_AXIS="0 -1 0"
           echo ROTATION_AXIS="0 -1 0" at PETRA P14
         fi
       fi
 # ESRF ID23-2:
       if [ "$DET_SN" == "PILATUS3 2M, S/N 24-0118, ESRF ID23" ] ; then
-        rotation_axis="0 -1 0"
+        ROTATION_AXIS="0 -1 0"
         echo ROTATION_AXIS="0 -1 0" at ESRF ID23-2
       fi
 
@@ -586,10 +598,12 @@ elif [ "$DET" == "eiger" ]; then
  nframes=`h5dump -d "/entry/instrument/detector/detectorSpecific/nimages" $FIRSTFRAME | awk '/\(0\): [0-9]/{print $2}'`
  DATA_RANGE="1 $nframes"
  SPOT_RANGE="1 `echo "scale=0; if (${nframes}<2) 1; if (${nframes}>1) ${nframes}/2"|bc -l`"
- 
+ DET_SN=`h5dump -d "/entry/instrument/detector/detector_number" $FIRSTFRAME | awk '/\(0\): /{print $2}' | sed s/\"//g`
+ echo detector serial number is $DET_SN
+
 # find out if HDF5 from Diamond (DLS=1) or Dectris (DLS=0)
   DLS=0
-  OVERLOAD=`h5dump -d "/entry/instrument/detector/detectorSpecific/countrate_correction_count_cutoff" $FIRSTFRAME 2>/dev/null` || DLS=1 
+  OVERLOAD=`h5dump -d "/entry/instrument/detector/detectorSpecific/countrate_correction_count_cutoff" $FIRSTFRAME 2>/dev/null` || DLS=1
   if [ "$DLS" == 1 ]; then
     echo Eiger HDF5 from Diamond
 # unfortunately h5dump 1.10 is required to get this right for the DLS .h5 files. This version is available at DLS but maybe not elsewhere
@@ -598,33 +612,31 @@ elif [ "$DET" == "eiger" ]; then
     OSCILLATION_RANGE=`h5dump -d "/entry/data/omega" $FIRSTFRAME | awk '/\(0\): [\-0-9]/{print $3-$2;exit}'`
     STARTING_ANGLE=`h5dump    -d "/entry/data/omega" $FIRSTFRAME | awk '/\(0\): [\-0-9]/{print $2;exit}' | sed -e "s/,//"`
     echo OSCILLATION_RANGE=$OSCILLATION_RANGE STARTING_ANGLE=$STARTING_ANGLE
-  # rotation_axis=`h5dump -a "/entry/sample/transformations/omega/vector" $FIRSTFRAME 2>/dev/null | grep "(0):" | sed -e "s/^.*://; s/,//g"`
+  # ROTATION_AXIS=`h5dump -a "/entry/sample/transformations/omega/vector" $FIRSTFRAME 2>/dev/null | grep "(0):" | sed -e "s/^.*://; s/,//g"`
   # the above gives -1 0 0 for DLS data instead of the correct 1 0 0, so commented out for now
   # comment while implementing rev 1.10: this is because the DLS headers are NeXus, so DIRECTION_OF_DETECTOR_X/Y_AXIS must be adjusted.
   else
     echo Eiger HDF5 from Dectris
-    OVERLOAD=`h5dump -d "/entry/instrument/detector/detectorSpecific/countrate_correction_count_cutoff" $FIRSTFRAME | awk '/\(0\):/{print $2}'`    
+    OVERLOAD=`h5dump -d "/entry/instrument/detector/detectorSpecific/countrate_correction_count_cutoff" $FIRSTFRAME | awk '/\(0\):/{print $2}'`
     OSCILLATION_RANGE=`h5dump -d "/entry/sample/goniometer/omega_range_average" $FIRSTFRAME | awk '/\(0\): [0-9]/{print $2}'`
   # STARTING_ANGLE:  the \- was introduced in version 0.91 to allow negative values :
-    STARTING_ANGLE=`h5dump -d "/entry/sample/goniometer/omega_start" $FIRSTFRAME | awk '/\(0\): [\-0-9]/{print $2}'`
+    STARTING_ANGLE=`h5dump -d "/entry/sample/goniometer/omega_start" $FIRSTFRAME 2>/dev/null | awk '/\(0\): [\-0-9]/{print $2}'`
   # /entry/sample/goniometer/omega_start is missing in some eiger2 detectors (e.g. Eiger2 9M with fw version release-2020.2.1 and SIMPLON API 1.8) (Feng YU 2021-07-18)
     if [ "$STARTING_ANGLE" == "" ]; then
-		  echo "/entry/sample/goniometer/omega_start not found, try /entry/sample/goniometer/omega"
+		  echo "/entry/sample/goniometer/omega_start not found, trying /entry/sample/goniometer/omega"
 		  STARTING_ANGLE=`h5dump -d /entry/sample/goniometer/omega $FIRSTFRAME | grep "(0):" | head -n 1 | awk '{print $2}' | sed -e "s/,//g"`
     fi
-    echo "STARTING_ANGLE=$STARTING_ANGLE"
   # If rotation axis set (NeXus)
-    rotation_axis=`h5dump -a "/entry/sample/transformations/omega/vector" $FIRSTFRAME 2>/dev/null | grep "(0):" | sed -e "s/^.*://; s/,//g"`
+    ROTATION_AXIS=`h5dump -a "/entry/sample/transformations/omega/vector" $FIRSTFRAME 2>/dev/null | grep "(0):" | sed -e "s/^.*://; s/,//g"`
   # EIGER2 16M CHESS ID7B2 has S/N E-32-0123 (A. Finke 2020-11-07) v0.99
-    SN=`h5dump -d "/entry/instrument/detector/detector_number" $FIRSTFRAME | awk '/\(0\): /{print $2}' | sed s/\"//g`
-    if [ "$SN" == "E-32-0123" ]; then
-      rotation_axis="-1 0 0"
+    if [ "$DET_SN" == "E-32-0123" ]; then
+      ROTATION_AXIS="-1 0 0"
       echo CHESS ID7B2 with inverted rotation axis
     fi
   # SSRF BL17U1 and SSRF BL10U2 (Feng YU 2021-07-18)
   # Eiger X 16M (S/N E-32-0111) was installed at SSRF BL17U1 from Oct 2017 to Feb 2021. After Feb 2021, it was moved back to SSRF BL10U2.
 	# 2021-03-01 00:00:00 time stamp is 1614528000
-    if [ "$SN" == "E-32-0111" ]; then
+    if [ "$DET_SN" == "E-32-0111" ]; then
       collection_time=`h5dump -d "/entry/instrument/detector/detectorSpecific/data_collection_date" $FIRSTFRAME | grep "(0):" | awk '{print $2}' | sed -e "s/\.\(.*\)//g; s/\"//g"`
       if [ `uname -s` == "Darwin" ]; then
         collection_timestamp=`date -j -f "%Y-%m-%dT%H:%M:%S" $collection_time +%s`
@@ -634,60 +646,60 @@ elif [ "$DET" == "eiger" ]; then
         collection_timestamp=0
       fi
       if [ $collection_timestamp -eq 0 ]; then
-        is_rotation_axis_set=1
-        rotation_axis=`h5dump -d "/SSRF/RotationAxis" $FIRSTFRAME 2>/dev/null || is_rotation_axis_set=0`
-        if [ "$is_rotation_axis_set" == "1" ]; then
-          rotation_axis=`h5dump -d "/SSRF/RotationAxis" $FIRSTFRAME | grep "(0):" | sed -e "s/^.*://; s/,//g"`
-          echo "The rotation axis of SSRF BL10U2 (Eiger X 16M) is $rotation_axis"
+        is_ROTATION_AXIS_set=1
+        ROTATION_AXIS=`h5dump -d "/SSRF/RotationAxis" $FIRSTFRAME 2>/dev/null || is_ROTATION_AXIS_set=0`
+        if [ "$is_ROTATION_AXIS_set" == "1" ]; then
+          ROTATION_AXIS=`h5dump -d "/SSRF/RotationAxis" $FIRSTFRAME | grep "(0):" | sed -e "s/^.*://; s/,//g"`
+          echo "The rotation axis of SSRF BL10U2 (Eiger X 16M) is $ROTATION_AXIS"
         else
-          rotation_axis="-1 0 0    ! Cannot determine rotation axis. SSRF BL17U1: -1 0 0; SSRF BL02U1: 0 -1 0"
+          ROTATION_AXIS="-1 0 0    ! Cannot determine rotation axis. SSRF BL17U1: -1 0 0; SSRF BL02U1: 0 -1 0"
         fi
       elif [ $collection_timestamp -ge 0 ] && [ $collection_timestamp -le 1614528000 ]; then
         # SSRF BL17U1
-        rotation_axis="-1 0 0"
+        ROTATION_AXIS="-1 0 0"
         echo "SSRF BL17U1 (Eiger X 16M) with inverted rotation axis"
       else
         # SSRF BL10U2
-        is_rotation_axis_set=1
-        rotation_axis=`h5dump -d "/SSRF/RotationAxis" $FIRSTFRAME 2>/dev/null || is_rotation_axis_set=0`
-        if [ "$is_rotation_axis_set" == "1" ]; then
-          rotation_axis=`h5dump -d "/SSRF/RotationAxis" $FIRSTFRAME | grep "(0):" | sed -e "s/^.*://; s/,//g"`
-          echo "The rotation axis of SSRF BL10U2 (Eiger X 16M) is $rotation_axis"
+        is_ROTATION_AXIS_set=1
+        ROTATION_AXIS=`h5dump -d "/SSRF/RotationAxis" $FIRSTFRAME 2>/dev/null || is_ROTATION_AXIS_set=0`
+        if [ "$is_ROTATION_AXIS_set" == "1" ]; then
+          ROTATION_AXIS=`h5dump -d "/SSRF/RotationAxis" $FIRSTFRAME | grep "(0):" | sed -e "s/^.*://; s/,//g"`
+          echo "The rotation axis of SSRF BL10U2 (Eiger X 16M) is $ROTATION_AXIS"
         else
-          rotation_axis="0 -1 0"
+          ROTATION_AXIS="0 -1 0"
           echo "SSRF BL10U2 (Eiger X 16M) with vertical rotation axis"
         fi
       fi
     fi
   # SSRF BL02U1 (Feng YU 2021-07-18)
   # EIGER2 S 9M SSRF BL02U1 has S/N E-18-0121
-    if [ "$SN" == "E-18-0121" ]; then
-      is_rotation_axis_set=1
-      rotation_axis=`h5dump -d "/SSRF/RotationAxis" $FIRSTFRAME 2>/dev/null || is_rotation_axis_set=0`
-      if [ "$is_rotation_axis_set" == "1" ]; then
-        rotation_axis=`h5dump -d "/SSRF/RotationAxis" $FIRSTFRAME | grep "(0):" | sed -e "s/^.*://; s/,//g"`
-        echo "The rotation axis of SSRF BL02U1 (Eiger2 S 9M) is $rotation_axis"
+    if [ "$DET_SN" == "E-18-0121" ]; then
+      is_ROTATION_AXIS_set=1
+      ROTATION_AXIS=`h5dump -d "/SSRF/RotationAxis" $FIRSTFRAME 2>/dev/null || is_ROTATION_AXIS_set=0`
+      if [ "$is_ROTATION_AXIS_set" == "1" ]; then
+        ROTATION_AXIS=`h5dump -d "/SSRF/RotationAxis" $FIRSTFRAME | grep "(0):" | sed -e "s/^.*://; s/,//g"`
+        echo "The rotation axis of SSRF BL02U1 (Eiger2 S 9M) is $ROTATION_AXIS"
       else
-        rotation_axis="1 0 0"
+        ROTATION_AXIS="1 0 0"
         echo "SSRF BL02U1 (Eiger2 S 9M) with horizontal rotation axis"
       fi
     fi
 # revision 1.05 specialcase nframes for Eiger detectors at BNL
-    if [ "$SN" == "E-18-0104" -o "$SN" == "E-32-0101" ]; then
-      echo specialcase nframes for Eiger detectors at BNL:
+    if [ "$DET_SN" == "E-18-0104" -o "$DET_SN" == "E-32-0101" ]; then
       nframes=`h5dump -A -g "/entry/data" $FIRSTFRAME | grep "DATASPACE  SIMPLE" | sed -e "s/,.*//" | awk '{a+=$5}END{print a}'`
       DATA_RANGE="1 $nframes"
       SPOT_RANGE="1 `echo "scale=0; if (${nframes}<2) 1; if (${nframes}>1) ${nframes}/2"|bc -l`"
+      echo Special case nframes for Eiger detectors at BNL: nframes=$nframes
     fi
   fi
-# rev 1.10: check for NeXus header. If found, its geometry will overwrite any rotation_axis set until here.
+# rev 1.10: check for NeXus header. If found, its geometry will overwrite any ROTATION_AXIS set until here.
   NeXus=0
-  h5dump -d "/entry/definition" $FIRSTFRAME | grep -q NXmx && NeXus=1
+  h5dump -d "/entry/definition" $FIRSTFRAME 2>/dev/null | grep -q NXmx && NeXus=1
   if [ "$NeXus" == "1" ]; then
     echo NeXus header found. This defines DIRECTION_OF_DETECTOR_X/Y-AXIS and ROTATION_AXIS.
     DIRECTION_OF_DETECTOR_X_AXIS=$(h5dump -d "/entry/instrument/detector/module/fast_pixel_direction" $FIRSTFRAME 2>/dev/null | grep "(0):" | tail -1 | sed -e "s/^.*://; s/,//g")
     DIRECTION_OF_DETECTOR_Y_AXIS=$(h5dump -d "/entry/instrument/detector/module/slow_pixel_direction" $FIRSTFRAME 2>/dev/null | grep "(0):" | tail -1 | sed -e "s/^.*://; s/,//g")
-    rotation_axis=$(h5dump -a "/entry/sample/transformations/omega/vector" $FIRSTFRAME 2>/dev/null | grep "(0):" | sed -e "s/^.*://; s/,//g")
+    ROTATION_AXIS=$(h5dump -a "/entry/sample/transformations/omega/vector" $FIRSTFRAME 2>/dev/null | grep "(0):" | sed -e "s/^.*://; s/,//g")
   else
     echo no NeXus header found.
   fi
@@ -708,13 +720,13 @@ elif [ "$DET" == "eiger" ]; then
   ORGY=`h5dump -d "/entry/instrument/detector/beam_center_y" $FIRSTFRAME | awk '/\(0\): [0-9]/{print $2}'`
 
   # find DETECTOR_DISTANCE :
-  DETECTOR_DISTANCE=`h5dump -d "/entry/instrument/detector/detector_distance" $FIRSTFRAME | awk '/\(0\): [0-9]/{print $2*1000}'`  
+  DETECTOR_DISTANCE=`h5dump -d "/entry/instrument/detector/detector_distance" $FIRSTFRAME | awk '/\(0\): [0-9]/{print $2*1000}'`
 
   SEPMIN=4
   CLUSTER_RADIUS=2
 
 elif [ "$DET" == "raxis" ]; then
-  echo Data from a RAXIS detector
+  echo Data from an RAXIS detector
 
   DETECTOR="RAXIS MINIMUM_VALID_PIXEL_VALUE=0  OVERLOAD=2000000"
   #let SKIP=768
@@ -728,52 +740,56 @@ elif [ "$DET" == "raxis" ]; then
   QX=$(python -c 'import struct; f=open("'$FIRSTFRAME'","rb");f.seek(776);print("%.6f"%struct.unpack(">f",f.read(4)))')
   QY=$(python -c 'import struct; f=open("'$FIRSTFRAME'","rb");f.seek(780);print("%.6f"%struct.unpack(">f",f.read(4)))')
   X_RAY_WAVELENGTH=$(python -c 'import struct; f=open("'$FIRSTFRAME'","rb");f.seek(292);print("%.6f"%struct.unpack(">f",f.read(4)))')
+  DIRECTION_OF_DETECTOR_Y_AXIS="0 -1 0"
+  POLARIZATION_PLANE_NORMAL="1 0 0"
+  ROTATION_AXIS="0 1 0"
 
 elif [ "$DET" == "dtrek" ]; then
-  echo "Data from a RAXIS or Saturn or Pilatus detector with dTREK format"
-
-  sed s/\;// tmp2 > tmp1
-  mv tmp1 tmp2
 
   dname=`grep "DETECTOR_NAMES=" tmp2 | sed -e "s/.*=//"`
-  flip=1
   if [ "$dname" == "CCD_" ]; then
     DETECTOR="SATURN MINIMUM_VALID_PIXEL_VALUE=1"
     dtrek_det="saturn"
-
-    # Find rotation axis. Warning: currently not support flipping (det(tmpmat)<0)
-    # I'm not sure this method is really valid - but at least mosflm seems to read this to determine rotation axis.
-    tmpmat=(`grep ${dname}SPATIAL_DISTORTION_VECTORS= tmp2 | tail -1 | sed -e "s/.*=//"`)
-    rotx=`echo "scale=6; -1.0*${tmpmat[0]}" | bc -l`
-    roty=`echo "scale=6; -1.0*${tmpmat[1]}" | bc -l`
-    rotation_axis="$rotx $roty 0"
-   if [ `echo "(${tmpmat[0]}*${tmpmat[3]}-(${tmpmat[1]}*${tmpmat[2]}))/1"|bc` -lt 0 ]; then
-    echo ""
-    echo "WARNING!! not-supported SPATIAL_DISTORTION_VECTORS header detected."
-    echo "Please report this to XDSwiki author."
-    echo ""
-   fi
   elif [ "$dname" == "PILT_" ]; then
     DETECTOR="PILATUS MINIMUM_VALID_PIXEL_VALUE=0"
     dtrek_det="pilatus"
     SEPMIN=3
     CLUSTER_RADIUS=1.5
-    rotation_axis="0 1 0"   # TODO: read from header
-    flip=-1
-    SENSOR_THICKNESS=0.45   # TODO: read from header
-# 2theta
-    TWOTHETA=`awk '/PILT_GONIO_VALUES=/{print $2}' tmp2`
-    echo TWOTHETA=$TWOTHETA
-    R1=`echo "scale=7;  c($TWOTHETA/$DEGTOR)" | bc -l`
-    R3=`echo "scale=7; -s($TWOTHETA/$DEGTOR)" | bc -l`
-    DIRECTION_OF_DETECTOR_X_AXIS="$R1 0 $R3"
+    SENSOR_THICKNESS=$(awk 'match($0,/SENSOR_THICKNESS= *(\S*)/,a){printf"%.3f",1000*a[1];exit}ENDFILE{print "0.45"}' tmp2)
   elif [ "$dname" == "RX_" ]; then
     DETECTOR="RAXIS MINIMUM_VALID_PIXEL_VALUE=0"
     dtrek_det="raxis"
+    POLARIZATION_PLANE_NORMAL="1 0 0"
+    ROTATION_AXIS="0 1 0"
   else
     DETECTOR="XXX MINIMUM_VALID_PIXEL_VALUE=XXX"
-    dtrek_det="unknown" 
+    dtrek_det="unknown"
+    echo "WARNING: Unsupported dTREK detector, check parameters"
   fi
+  DET_SN=`awk '/_DETECTOR_IDENTIFICATION=/{print;exit}' tmp2 | sed 's/.*DETECTOR_IDENTIFICATION=//'`
+  echo "Data from a $dtrek_det detector with dTREK format, ID=$DET_SN"
+  # Find rotation axis and flipping
+  # I'm not sure this method is really valid - but at least mosflm seems to read this to determine rotation axis.
+  tmpmat=(`grep ${dname}SPATIAL_DISTORTION_VECTORS= tmp2 | tail -1 | sed -e "s/.*=//"`)
+  flip=`echo "(${tmpmat[0]}*${tmpmat[3]}-(${tmpmat[1]}*${tmpmat[2]}))/1"|bc`
+  if [ "$flip" -ne 1 -a "$flip" -ne -1 ]; then
+    echo ""
+    echo "WARNING!! not-supported SPATIAL_DISTORTION_VECTORS header."
+    echo "Please report this to XDSwiki author."
+    echo ""
+  elif [ "$flip" -eq -1 ]; then
+    echo "Detector is flipped (from SPATIAL_DISTORTION_VECTORS header)"
+  fi
+  rotx=`echo "scale=6; -1.0*$flip*${tmpmat[0]}" | bc -l`
+  roty=`echo "scale=6; -1.0*$flip*${tmpmat[1]}" | bc -l`
+  ROTATION_AXIS="$rotx $roty 0"
+# 2theta
+  TWOTHETA=`awk '/'${dname}'GONIO_VALUES=/{print $2;exit}' tmp2`
+  R1=`echo "scale=7; $flip*-c($TWOTHETA/$DEGTOR)" | bc -l`
+  R3=`echo "scale=7; $flip* s($TWOTHETA/$DEGTOR)" | bc -l`
+  DIRECTION_OF_DETECTOR_X_AXIS="$R1 0 $R3"
+  echo "Detector 2-theta = $TWOTHETA  "
+  echo DIRECTION_OF_DETECTOR_X_AXIS="$R1 0 $R3"
   # find OVERLOAD
   SATURATED_VALUE=`grep SATURATED_VALUE tmp2 | head -1 | sed s/SATURATED_VALUE=//`
   DETECTOR="${DETECTOR}  OVERLOAD=${SATURATED_VALUE}"
@@ -795,7 +811,7 @@ elif [ "$DET" == "dtrek" ]; then
   ORGX=${SPATIAL_DISTORTION_INFO[0]}
   ORGY=${SPATIAL_DISTORTION_INFO[1]}
 
-  # find DETECTOR_DISTANCE 
+  # find DETECTOR_DISTANCE
   GONIO_NAMES=(`grep ${dname}GONIO_NAMES= tmp2 | tail -1 | sed s/.*_GONIO_NAMES=//`)
   GONIO_VALUES=(`grep ${dname}GONIO_VALUES= tmp2 | tail -1 | sed s/.*_GONIO_VALUES=//`)
 #  GONIO_UNITS=(`grep ${dname}GONIO_UNITS= tmp2 | tail -1 | sed s/.*_GONIO_UNITS=//`)
@@ -803,29 +819,31 @@ elif [ "$DET" == "dtrek" ]; then
   do
    idx=$((i-1))
    if [ "${GONIO_NAMES[$idx]}" == "Distance" ]; then
-    DETECTOR_DISTANCE="${GONIO_VALUES[$idx]}"
-    # TODO: Check unit!! - ${GONIO_UNITS[$idx]}
-   fi
-   if [ $flip -gt 0 ]; then 
-    DETECTOR_DISTANCE="-${GONIO_VALUES[$idx]}"
-    # TODO: Check unit!! - ${GONIO_UNITS[$idx]}
-    echo "using distance <0"
+     if [ $flip -gt 0 ]; then
+       DETECTOR_DISTANCE="-${GONIO_VALUES[$idx]}"
+       echo "Detector not flipped; using negative distance"
+     else
+       DETECTOR_DISTANCE="${GONIO_VALUES[$idx]}"
+       echo "Detector flipped; using positive distance"
+     fi
+     break
    fi
   done
 
-  # find OSCILLATION_RANGE
+  # find OSCILLATION start and range
   ROTATION=(`grep "^ROTATION=" tmp2 | tail -1 | sed s/ROTATION=//`)
+  STARTING_ANGLE=${ROTATION[0]}
   OSCILLATION_RANGE=${ROTATION[2]}
 
 elif [ "$DET" == "MAR345" ]; then
-  
+
  echo  "Data from a Mar345 image plate detector"
  DETECTOR="MAR345  MINIMUM_VALID_PIXEL_VALUE=0  OVERLOAD=130000"
- NX=`awk '/FORMAT/{print $2}' tmp2`
+ NX=`awk '/FORMAT/{print $2;exit}' tmp2`
 # next line is rev 1.02 (previously NY= $NX):
- NY=`awk -v NX=$NX '/FORMAT/{print $4/NX}' tmp2`
- QX=`awk '/PIXEL/{print $3/1000.}' tmp2`
- QY=`awk '/PIXEL/{print $5/1000.}' tmp2`
+ NY=`awk -v NX=$NX '/FORMAT/{print $4/NX;exit}' tmp2`
+ QX=`awk '/PIXEL/{print $3/1000.;exit}' tmp2`
+ QY=`awk '/PIXEL/{print $5/1000.;exit}' tmp2`
  if grep -q 'CENTER' tmp2; then
    echo Beam center found.
    ORGX=`grep 'CENTER' tmp2 | awk '{print $3}'`
@@ -835,45 +853,45 @@ elif [ "$DET" == "MAR345" ]; then
    ORGX=`echo $NX / 2 | bc`
    ORGY=`echo $NY / 2 | bc`
  fi
- DETECTOR_DISTANCE=`grep 'DISTANCE' tmp2 | awk '{print $2}'`               
- X_RAY_WAVELENGTH=`grep 'WAVELENGTH' tmp2 | awk '{print $2}'` 
- OSCILLATION_RANGE=`grep 'PHI' tmp2 | awk '{print $5-$3}'`    
- TRUSTED_REGION="0 0.99"    
-  
+ DETECTOR_DISTANCE=`grep 'DISTANCE' tmp2 | awk '{print $2}'`
+ X_RAY_WAVELENGTH=`grep 'WAVELENGTH' tmp2 | awk '{print $2}'`
+ OSCILLATION_RANGE=`grep 'PHI' tmp2 | awk '{print $5-$3}'`
+ TRUSTED_REGION="0 0.99"
+
 elif [ "$DET" == "OLDMAR" ]; then
-  
+
  echo  "Data from old type MAR image plate detector"
  DETECTOR="MAR  MINIMUM_VALID_PIXEL_VALUE=0  OVERLOAD=130000"
- NX=`awk 'NR==2 {print $2}' tmp2`
+ NX=`awk 'NR==2 {print $2;exit}' tmp2`
  NY=$NX
- QX=`awk 'NR==2 {print $15}' tmp2`
+ QX=`awk 'NR==2 {print $15;exit}' tmp2`
  QY=$QX
- ORGX=`awk 'NR==2 {print $19}' tmp2`
- ORGY=`awk 'NR==2 {print $20}' tmp2`
- DETECTOR_DISTANCE=`awk 'NR==2 {print $22}' tmp2`               
- X_RAY_WAVELENGTH=`awk 'NR==2 {print $21}' tmp2` 
- OSCILLATION_RANGE=`awk 'NR==2 {print $24-$23}' tmp2`    
- TRUSTED_REGION="0 0.99"   
- rotation_axis="0 1 0"  
+ ORGX=`awk 'NR==2 {print $19;exit}' tmp2`
+ ORGY=`awk 'NR==2 {print $20;exit}' tmp2`
+ DETECTOR_DISTANCE=`awk 'NR==2 {print $22;exit}' tmp2`
+ X_RAY_WAVELENGTH=`awk 'NR==2 {print $21;exit}' tmp2`
+ OSCILLATION_RANGE=`awk 'NR==2 {print $24-$23;exit}' tmp2`
+ TRUSTED_REGION="0 0.99"
+ ROTATION_AXIS="0 1 0"
  echo unsure if sign of anomalous signal is correct - please verify or try both hands!
-       
+
 elif [ "$DET" == "Bruker-cbf" ]; then
-  
+
  echo  "Data from a Bruker-cbf detector"
 # MINIMUM_NUMBER_OF_PIXELS_IN_A_SPOT:
- MNOPIAS=6 
+ MNOPIAS=6
 # use complete detector including corners:
- TRUSTED_REGION="0 1.42"        
+ TRUSTED_REGION="0 1.42"
 # polarization
- pol_frac=`awk '/polarizn_source_ratio/{print $2}' tmp2`
+ pol_frac=`awk '/polarizn_source_ratio/{print $2;exit}' tmp2`
  pol_frac=`echo "${pol_frac}+0.5" | bc -l`
- OVERLOAD=`awk '/_array_intensities.overload/{print $2}' tmp2`
+ OVERLOAD=`awk '/_array_intensities.overload/{print $2;exit}' tmp2`
  DETECTOR="BRUKER MINIMUM_VALID_PIXEL_VALUE=0 OVERLOAD=${OVERLOAD}"
- NX=`awk '/X-Binary-Size-Fastest-Dimension/{print $2}' tmp2`
- NY=`awk '/X-Binary-Size-Second-Dimension/{print $2}' tmp2`
- 
- QX=`awk '/ELEMENT_X ELEMENT_X/{print $4}' tmp2`
- QY=`awk '/ELEMENT_Y ELEMENT_Y/{print $4}' tmp2`
+ NX=`awk '/X-Binary-Size-Fastest-Dimension/{print $2;exit}' tmp2`
+ NY=`awk '/X-Binary-Size-Second-Dimension/{print $2;exit}' tmp2`
+
+ QX=`awk '/ELEMENT_X ELEMENT_X/{print $4;exit}' tmp2`
+ QY=`awk '/ELEMENT_Y ELEMENT_Y/{print $4;exit}' tmp2`
 
 # ORGX/Y-offsets relative to center of detector:
  ORGX=`grep " 0 0 ? ? ?" tmp2 | awk '/ H /{print $2}'`
@@ -882,15 +900,15 @@ elif [ "$DET" == "Bruker-cbf" ]; then
  ORGX=`echo "scale=2; ${NX}/2+($ORGX/$QX)" | bc -l`
  ORGY=`echo "scale=2; ${NY}/2-($ORGY/$QY)" | bc -l`
 
- DETECTOR_DISTANCE=`grep "0 0 ? ? ?" tmp2 | awk '/DX /{print $2}'` 
+ DETECTOR_DISTANCE=`grep "0 0 ? ? ?" tmp2 | awk '/DX /{print $2}'`
 
- X_RAY_WAVELENGTH=`awk '/diffrn_radiation_wavelength.wavelength/{print $2}' tmp2` 
+ X_RAY_WAVELENGTH=`awk '/diffrn_radiation_wavelength.wavelength/{print $2;exit}' tmp2`
 # fix 16.3.20: instead of print, use printf "%.5f", because bc does not accept e.g. 3.1e-005
- OMEGA=`awk '/OMEGA \? \? \?/{printf "%.5f",$5}' tmp2`
- DELTAOMEGA=`awk '/OMEGA \? \? \?/{printf "%.5f",$6}' tmp2`
- PHI=`awk '/PHI \? \? \?/{printf "%.5f",$5}' tmp2`
- DELTAPHI=`awk '/PHI \? \? \?/{printf "%.5f",$6}' tmp2`
- KAPPA=`awk '/CHI \? \? \?/{printf "%.5f",$5}' tmp2`
+ OMEGA=`awk '/OMEGA \? \? \?/{printf "%.5f",$5;exit}' tmp2`
+ DELTAOMEGA=`awk '/OMEGA \? \? \?/{printf "%.5f",$6;exit}' tmp2`
+ PHI=`awk '/PHI \? \? \?/{printf "%.5f",$5;exit}' tmp2`
+ DELTAPHI=`awk '/PHI \? \? \?/{printf "%.5f",$6;exit}' tmp2`
+ KAPPA=`awk '/CHI \? \? \?/{printf "%.5f",$5;exit}' tmp2`
 # echo OMEGA DELTAOMEGA PHI DELTAPHI KAPPA= $OMEGA $DELTAOMEGA $PHI $DELTAPHI $KAPPA
 
 # test whether the absolute value of deltaphi is > absolute value of deltaomega
@@ -899,21 +917,20 @@ elif [ "$DET" == "Bruker-cbf" ]; then
     R3=`echo "scale=7; s($KAPPA/$DEGTOR)*s($OMEGA/$DEGTOR)" | bc -l`
     R1=`echo "scale=7; s($KAPPA/$DEGTOR)*c($OMEGA/$DEGTOR)" | bc -l`
     R2=`echo "scale=7; c($KAPPA/$DEGTOR)         	  " | bc -l`
-    rotation_axis="$R1 $R2 $R3"
+    ROTATION_AXIS="$R1 $R2 $R3"
     OSCILLATION_RANGE=${DELTAPHI}
     STARTING_ANGLE=${PHI}
-# here we could check if DELTAPHI is <0, and if so, negate it and rotation_axis
+# here we could check if DELTAPHI is <0, and if so, negate it and ROTATION_AXIS
  else
     echo OMEGA scan
-    rotation_axis="0 -1 0"
+    ROTATION_AXIS="0 -1 0"
     OSCILLATION_RANGE=${DELTAOMEGA}
     STARTING_ANGLE=${OMEGA}
-# here we could check if DELTAOMEGA is <0, and if so, negate it and rotation_axis
+# here we could check if DELTAOMEGA is <0, and if so, negate it and ROTATION_AXIS
  fi
- echo STARTING_ANGLE= $STARTING_ANGLE        ! only read by IDXREF                
 
 # 2theta
-  TWOTHETA=`awk '/TWOTHETA \? \? \?/{print $5}' tmp2`
+  TWOTHETA=`awk '/TWOTHETA \? \? \?/{print $5;exit}' tmp2`
   echo TWOTHETA=$TWOTHETA
   R1=`echo "scale=7; c($TWOTHETA/$DEGTOR)" | bc -l`
   R3=`echo "scale=7; s($TWOTHETA/$DEGTOR)" | bc -l`
@@ -921,30 +938,83 @@ elif [ "$DET" == "Bruker-cbf" ]; then
 # end of Bruker-cbf section
 else
   echo should never come here
-  exit 1                     
-fi                           
+  exit 1
+fi
 
-echo ORGX= $ORGX ORGY= $ORGY - check these values with adxv !
-echo DETECTOR_DISTANCE= $DETECTOR_DISTANCE  ! only read by XYCORR, IDXREF                     
-echo OSCILLATION_RANGE= $OSCILLATION_RANGE  ! only read by IDXREF 
-echo X-RAY_WAVELENGTH= $X_RAY_WAVELENGTH    ! only read by IDXREF                   
+echo ORGX= $ORGX ORGY= $ORGY - check these values with adxv or xdsgui !
+echo DETECTOR_DISTANCE= $DETECTOR_DISTANCE  ! only read by XYCORR, IDXREF
+echo STARTING_ANGLE= $STARTING_ANGLE        ! only read by IDXREF
+echo OSCILLATION_RANGE= $OSCILLATION_RANGE  ! only read by IDXREF
+echo X-RAY_WAVELENGTH= $X_RAY_WAVELENGTH    ! only read by IDXREF
+if (( $(echo "$X_RAY_WAVELENGTH > 1.54 && $X_RAY_WAVELENGTH < 1.55" |bc -l) )); then
+  echo "Copper K-alpha source, FRACTION_OF_POLARIZATION commented out"
+  not_synchrotron='!'
+fi
 
-# now we know everything that is required to generate XDS.INP
+if [ "$DET" == "eiger" ] && [ "$is_h5" == 1 ]; then
+  if [ "$DLS" == 0 ] ; then
+    neggia_path=${NEGGIA_PATH-/usr/local/lib64/dectris-neggia.so}
+    if [ -e $neggia_path ]; then
+      LIB="LIB=$neggia_path"
+      echo "LIB= <dectris-neggia> was written to XDS.INP . Check the path! For Apple M1 processors, modify the name or set \$NEGGIA_PATH."
+    else
+      LIB="!LIB=/usr/local/lib64/dectris-neggia.so"
+      echo "dectris-neggia.so not found. Specify LIB=<path-to-dectris-neggia> in XDS.INP -- set \$NEGGIA_PATH to specify the path!"
+    fi
+  else
+    durin_path=${DURIN_PATH-/usr/local/lib64/durin-plugin.so}
+    if [ -e $durin_path ]; then
+      LIB="LIB=$durin_path"
+      echo "LIB= <durin-plugin> was written to XDS.INP . Check the path! For Apple M1 processors, modify the name or set \$DURIN_PATH."
+    else
+      LIB="!LIB=/usr/local/lib64/durin-plugin.so"
+      echo "durin-plugin.so not found. Specify LIB=<path-to-durin-plugin> in XDS.INP -- set \$DURIN_PATH to specify the path!"
+    fi
+  fi
+fi
+if [ "$ROTATION_AXIS" != "" ]; then
+  ROTATION_AXIS="$ROTATION_AXIS  ! only read by IDXREF"
+elif [ "$REVERSE_PHI" == "no" ]; then
+  ROTATION_AXIS='1 0 0  ! Australian Synchrotron, SERCAT ID-22 (?), APS 19-ID (?), ESRF BM30A, SPring-8, SSRF need -1 0 0. Diamond ID24 needs 0 -1 0'
+else
+  ROTATION_AXIS='-1 0 0  ! Default; if this is wrong, please contact author.'
+fi
 
+# Append 2-theta comment if defined
+if (( $(echo "${TWOTHETA}0 != 0"|bc -l) )); then
+  COMMENT_ORGXY="$COMMENT_ORGXY
+! TWOTHETA=$TWOTHETA -- information only, do not uncomment. If indexing fails, check DIRECTION_OF_DETECTOR_X-AXIS"
+fi
+
+if [ "$DET" == "pilatus" -a "$NX" == "2463" -a "$NY" == "5071" ]; then
+  SEGMENTED=1
+fi
+
+# now we know almost everything that is required to generate XDS.INP
+# --------- Generate XDS.INP containing all defined parameters ----------
 cat > XDS.INP << eof
+!=============================================================================
 ! written by generate_XDS.INP version $REVISION
+! For more details on XDS parameters, please check the online documentation at
+!   http://xds.mr.mpg.de/html_doc/xds_parameters.html
+!
+! Full documentation, including complete detector templates, at xds.mr.mpg.de .
+! More documentation in wiki.uni-konstanz.de/xds/index.php .
+! After running xds, inspect at least the agreement of predicted and observed
+! spots in FRAME.cbf!
+!=============================================================================
 JOB= XYCORR INIT COLSPOT IDXREF DEFPIX INTEGRATE CORRECT
-ORGX= $ORGX ORGY= $ORGY  ! values from frame header; only read by XYCORR, IDXREF     
+ORGX= $ORGX ORGY= $ORGY  ! values from frame header; only read by XYCORR, IDXREF
 $COMMENT_ORGXY
-DETECTOR_DISTANCE= $DETECTOR_DISTANCE !read by XYCORR, IDXREF. Negative if detector normal points to crystal.               
-OSCILLATION_RANGE= $OSCILLATION_RANGE   
-STARTING_ANGLE= $STARTING_ANGLE                 
-X-RAY_WAVELENGTH= $X_RAY_WAVELENGTH                      
+DETECTOR_DISTANCE= $DETECTOR_DISTANCE !read by XYCORR, IDXREF. Negative if detector normal points to crystal.
+OSCILLATION_RANGE= $OSCILLATION_RANGE
+STARTING_ANGLE= $STARTING_ANGLE
+X-RAY_WAVELENGTH= $X_RAY_WAVELENGTH
 NAME_TEMPLATE_OF_DATA_FRAMES=$NAME_TEMPLATE_OF_DATA_FRAMES
-! REFERENCE_DATA_SET=xxx/XDS_ASCII.HKL ! e.g. to ensure consistent indexing  
-DATA_RANGE=$DATA_RANGE                                                     
-SPOT_RANGE=$SPOT_RANGE                                                     
-! BACKGROUND_RANGE=1 10 ! rather use defaults (first 5 degree of rotation)   
+! REFERENCE_DATA_SET=xxx/XDS_ASCII.HKL ! e.g. to ensure consistent indexing
+DATA_RANGE=$DATA_RANGE
+SPOT_RANGE=$SPOT_RANGE
+! BACKGROUND_RANGE=1 10 ! rather use defaults (first 5 degree of rotation)
 
 SPACE_GROUP_NUMBER=0                   ! 0 if unknown
 UNIT_CELL_CONSTANTS= 70 80 90 90 90 90 ! put correct values if known
@@ -968,7 +1038,7 @@ FRIEDEL'S_LAW=FALSE     ! This acts only on the CORRECT step
 ! parameters with changes wrt default values:
 TRUSTED_REGION=$TRUSTED_REGION
 VALUE_RANGE_FOR_TRUSTED_DETECTOR_PIXELS=6000. 30000. ! often 7000 or 8000 is ok
-STRONG_PIXEL=4           ! COLSPOT: only use strong reflections (default is 3)
+!STRONG_PIXEL=4  ! COLSPOT: only use strong reflections (default is 3). For XDS versions before mid-2024.
 MINIMUM_NUMBER_OF_PIXELS_IN_A_SPOT=$MNOPIAS ! default of 6 is sometimes too high
 ! close spots/long cell axis: reduce SEPMIN and CLUSTER_RADIUS from their defaults of 7 and 3.5
 SEPMIN=$SEPMIN  CLUSTER_RADIUS=$CLUSTER_RADIUS ! 4 and 2 for Pixel Array Detectors
@@ -983,65 +1053,19 @@ DETECTOR= $DETECTOR
 SENSOR_THICKNESS= $SENSOR_THICKNESS
 ! attention CCD detectors: for very high resolution (better than 1A) make sure to specify SILICON
 ! as about 32* what CORRECT.LP suggests (absorption of phosphor is much higher than that of silicon).
-! Better: read the article http://strucbio.biologie.uni-konstanz.de/xdswiki/index.php/SILICON .
+! Better: read the article http://wiki.uni-konstanz.de/xds/index.php/SILICON .
 NX= $NX NY= $NY  QX= $QX  QY= $QY ! to make CORRECT happy if frames are unavailable
-
-eof
-
-if [ "$DET" == "eiger" ] && [ "$is_h5" == 1 ]; then
-  if [ "$DLS" == 0 ] ; then
-    if [ -e /usr/local/lib64/dectris-neggia.so ]; then
-      echo LIB=/usr/local/lib64/dectris-neggia.so >> XDS.INP
-      echo LIB= line was written to XDS.INP . For Apple ARM64 processors, you must modify the name.
-    else
-      echo !LIB=/usr/local/lib64/dectris-neggia.so >> XDS.INP
-      echo /usr/local/lib64/dectris-neggia.so was not found - specify location manually!
-    fi
-  else
-    if [ -e /usr/local/lib64/durin-plugin.so ]; then
-      echo LIB=/usr/local/lib64/durin-plugin.so >> XDS.INP
-      echo LIB= line was written to XDS.INP
-    else
-      echo !LIB=/usr/local/lib64/durin-plugin.so >> XDS.INP
-      echo /usr/local/lib64/durin-plugin.so was not found - specify location manually!
-    fi
-  fi 
-fi 
-
-if [ "$DET" == "raxis" -o "$dtrek_det" == "raxis" ]; then
- cat >> XDS.INP << eof
-DIRECTION_OF_DETECTOR_X-AXIS=1 0 0
-DIRECTION_OF_DETECTOR_Y-AXIS=0 -1 0
-INCIDENT_BEAM_DIRECTION=0 0 1   ! only read by IDXREF
-ROTATION_AXIS=0 1 0             ! only read by IDXREF
-!FRACTION_OF_POLARIZATION=0.98   ! uncomment if synchrotron; only used by CORRECT
-POLARIZATION_PLANE_NORMAL=1 0 0  ! only used by CORRECT
-eof
-else
- if [ "$rotation_axis" != "" ]; then
-  echo "ROTATION_AXIS= $rotation_axis  ! only read by IDXREF" >> XDS.INP
- elif [ "$REVERSE_PHI" == "no" ]; then
-  echo 'ROTATION_AXIS=1 0 0  ! Australian Synchrotron, SERCAT ID-22 (?), APS 19-ID (?), ESRF BM30A, SPring-8, SSRF need -1 0 0. Diamond ID24 needs 0 -1 0' >> XDS.INP
- else
-  echo 'ROTATION_AXIS=-1 0 0  ! if this is wrong, please contact author.' >> XDS.INP
- fi
- if [ "$dtrek_det" == "saturn" ]; then
- cat >> XDS.INP << eof
-DIRECTION_OF_DETECTOR_X-AXIS=-1 0 0
-DIRECTION_OF_DETECTOR_Y-AXIS= 0 1 0
-eof
- else
- cat >> XDS.INP << eof
+$LIB
+ROTATION_AXIS=$ROTATION_AXIS
 DIRECTION_OF_DETECTOR_X-AXIS=$DIRECTION_OF_DETECTOR_X_AXIS
 DIRECTION_OF_DETECTOR_Y-AXIS=$DIRECTION_OF_DETECTOR_Y_AXIS
+INCIDENT_BEAM_DIRECTION=0 0 1   ! only read by IDXREF
+${not_synchrotron}FRACTION_OF_POLARIZATION=${pol_frac}   ! comment out if not synchrotron; only use by CORRECT
+                                       ! better value is provided by beamline staff!
+POLARIZATION_PLANE_NORMAL=$POLARIZATION_PLANE_NORMAL        ! only used by CORRECT
 eof
- fi
- cat >> XDS.INP << eof
-INCIDENT_BEAM_DIRECTION=0 0 1          ! only read by IDXREF
-FRACTION_OF_POLARIZATION=${pol_frac}   ! better value is provided by beamline staff!
-POLARIZATION_PLANE_NORMAL=0 1 0        ! only used by CORRECT
-eof
-fi
+
+# --------- Append known detector untrusted regions -----------
 cat >> XDS.INP << eof
 !used by DEFPIX and CORRECT to exclude ice-reflections / ice rings - uncomment if necessary
 !fine-grained list is in Thorn et al http://journals.iucr.org/d/issues/2017/09/00/hi5647/index.html
@@ -1059,16 +1083,20 @@ cat >> XDS.INP << eof
 ! 1.299 1.296, 1.275 1.274, 1.261 1.259, 1.224 1.222, 1.171 1.168, 1.124 1.122 (compiled by GlobalPhasing)
 
 eof
+# --------- Append additional detector-specific parameters ----------
 if [ "$DET" == "Bruker-cbf" ]; then
   echo "DELPHI=15 ! refine less often than the default of 5" >> XDS.INP
 elif [ "$DET" == "adsc-CMOS1" ]; then
   echo UNTRUSTED_RECTANGLE= 0 1468  2451 2631  >> XDS.INP
+elif [ "$dtrek_det" == "pilatus" -a "$NX" == 487 -a "$NY" = "407" ]; then
+  echo UNTRUSTED_RECTANGLE= 1 487 196 212 >> XDS.INP # Dectris Pilatus 200K
 elif [ "$DET" == "pilatus" -o "$DET" == "eiger" ]; then
 cat >> XDS.INP << eof
-NUMBER_OF_PROFILE_GRID_POINTS_ALONG_ALPHA/BETA=13 ! Default is 9 - Increasing may improve data 
-NUMBER_OF_PROFILE_GRID_POINTS_ALONG_GAMMA=13      ! accuracy, particularly if finely-sliced on phi, 
-!                                                   and does not seem to have any downsides. 
+NUMBER_OF_PROFILE_GRID_POINTS_ALONG_ALPHA/BETA=13 ! Default is 9 - Increasing may improve data
+NUMBER_OF_PROFILE_GRID_POINTS_ALONG_GAMMA=13      ! accuracy, particularly if finely-sliced on phi,
+!                                                   and does not seem to have any downsides.
 eof
+# -------- Append known detector untrusted regions ------------------
   if [ "$NX" == "1028"  -a "$NY" == "1062" ]; then
 # Eiger2 1M ; v0.97 numbers from Andreas Förster
     cat >> XDS.INP << eof
@@ -1078,7 +1106,7 @@ eof
     if ! grep -q Flat_field tmp2 ; then
     cat >> XDS.INP << eof
 ! the following specifications are for a detector _without_ proper
-! flat_field correction; they cut away one additional pixel adjacent 
+! flat_field correction; they mask one additional pixel adjacent
 ! to each UNTRUSTED_RECTANGLE
 !EXCLUSION OF VERTICAL DEAD AREAS OF THE PILATUS 2M DETECTOR
 UNTRUSTED_RECTANGLE= 486  496     0 1680
@@ -1117,7 +1145,7 @@ eof
  UNTRUSTED_RECTANGLE=    0 2069   1062 1101
  UNTRUSTED_RECTANGLE=    0 2069   1612 1651
 eof
-  elif [ "$NX" == "2463" ]; then
+  elif [ "$NX" == "2463" -a "$NY" == "2527" ]; then
 # Pilatus 6M
 # FIXME: here we could test if a Flat_field correction was applied like we do for 2M
     cat >> XDS.INP << eof
@@ -1176,7 +1204,7 @@ eof
  UNTRUSTED_RECTANGLE=    0 4150   3819 3859
 !EXCLUSION OF VERTICAL DEAD AREAS OF THE EIGER 16M DETECTOR + ONE PIXEL ON EACH SIDE
  UNTRUSTED_RECTANGLE= 1029 1042      0 4371
- UNTRUSTED_RECTANGLE= 2069 2082      0 4371 
+ UNTRUSTED_RECTANGLE= 2069 2082      0 4371
  UNTRUSTED_RECTANGLE= 3109 3122      0 4371
 eof
   elif [ "$NX" == "4148" -a "$NY" == "4362" ]; then
@@ -1186,7 +1214,7 @@ eof
  UNTRUSTED_RECTANGLE= 1028 1041      0 4363
  UNTRUSTED_RECTANGLE= 2068 2081      0 4363
  UNTRUSTED_RECTANGLE= 3108 3121      0 4363
-!EXCLUSION OF VERTICAL DEAD AREAS OF THE EIGER2 16M DETECTOR 
+!EXCLUSION OF VERTICAL DEAD AREAS OF THE EIGER2 16M DETECTOR
  UNTRUSTED_RECTANGLE=    0 4149    512  551
  UNTRUSTED_RECTANGLE=    0 4149   1062 1101
  UNTRUSTED_RECTANGLE=    0 4149   1612 1651
@@ -1195,11 +1223,57 @@ eof
  UNTRUSTED_RECTANGLE=    0 4149   3262 3301
  UNTRUSTED_RECTANGLE=    0 4149   3812 3851
 eof
+  elif [ "$NX" == "2463" -a "$NY" == "5071" ]; then
+    : # handled above, before writing XDS.INP, untrusted regions come from site file
+  else
+    echo "**** WARNING ****"
+    echo "Unknown Pilatus or Eiger detector, add UNTRUSTED regions and SEGMENT information manually"
   fi
+fi
+# Mechanism to append detector-specific parameters without editing this file:
+# NOTE: some detectors don't set DET_SN so this is not always unique
+# If the detector name is present in $DET_SN, then use only $DET_SN
+if [ "$DET_SN" != "" ]; then
+  echo "$DET_SN" | grep -qi "$DET" && DET="$DET_SN" || DET="${DET}_$DET_SN"
+fi
+DET=$(echo $DET | sed 's/ /_/g;s/[^-_A-Za-z0-9]//g;')
+site_file="$HOME/.xds-site/$DET"
+if [ -f $site_file ]; then
+  echo Appending site parameters from: $site_file
+  echo "! Parameters from $site_file" >> XDS.INP
+  echo "Site parameters:"
+  cat $site_file | head -20
+  [ $(wc -l $site_file | awk '{print $1}') -gt 20 ] && echo "... (truncated)"
+  echo
+  # Only FRACTION_POLARIZATION and ROTATION_AXIS are commented out automatically because they
+  # are the most likely to not match defaults.
+  # For segmented detectors, also allow origin and distance to be replaced
+  # Also likely adjustments are UNTRUSTED regions and maybe SILICON, but those don't replace existing parameters
+  # Create a pattern like "XX\|YY" to search overriden parameters.
+  REDEF_TOKENS="POLARIZATION\|ROTATION_AXIS\|TRUSTED_REGION"
+  [ "$SEGMENTED" != "" ] && REDEF_TOKENS=$REDEF_TOKENS"\|ORGX\|ORGY\|DETECTOR_DISTANCE\|"
+  pattern=$(grep "$REDEF_TOKENS" $site_file | grep -v SEGMENT | uniq | awk 'match($0,/^ *(\w+) *=/,a){x=x"\\|"a[1];}END{print substr(x,3);}')
+  if [ "$pattern" != "" -a $(grep "^!! *\($pattern\)" XDS.INP) != ""]; then
+      sed 's/\(^ *\('$pattern'\) *=\)/!!!\1/;' XDS.INP >tmp1
+      echo "Overridden parameters:"
+      grep "^ *\($pattern\)" XDS.INP
+      echo
+      mv tmp1 XDS.INP
+  fi
+  cat $site_file >> XDS.INP
+else
+  if [ "$SEGMENTED" != "" ]; then
+    echo "**** Multi-SEGMENTed detector, site file is mandatory ****"
+  fi
+  echo "Detector specific parameters can be placed in: $site_file"
+  echo "! Detector specific parameters can be placed in:" >> XDS.INP
+  echo "!     $site_file" >> XDS.INP
+  echo "! FRACTION_OF_POLARIZATION, ROTATION_AXIS and TRUSTED_REGION will auto-comment the replaced parameters" >> XDS.INP
+  echo "! If the site file defines SEGMENTs then ORGX, ORGY, and DISTANCE may be overridden" >> XDS.INP
 fi
 echo XDS.INP is ready for use. The file has only the most important keywords.
 echo Full documentation, including complete detector templates, at xds.mr.mpg.de .
-echo More documentation in strucbio.biologie.uni-konstanz.de/xdswiki/index.php .
-echo After running xds, inspect at least the agreement of predicted and observed 
+echo More documentation in wiki.uni-konstanz.de/xds/index.php .
+echo After running xds, inspect at least the agreement of predicted and observed
 echo spots in FRAME.cbf!
 rm -f tmp1 tmp2

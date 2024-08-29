@@ -11,11 +11,7 @@
 for arg in "$@"; do
     IFS="=" read -r key value <<< "$arg"
     case $key in
-        data_path) DATA_PATH="$value" ;;
-        rotation_axis) ROTATION_AXIS="$value" ;;
         round) ROUND="$value" ;;
-        source_dir) SOURCE_DIR="$value" ;;
-        file_type) FILE_TYPE="$value" ;;
         flag) FLAG_autoPROC="$value" ;;
         sp) SPACE_GROUP="$value" ;;
         cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
@@ -37,10 +33,17 @@ case "${FLAG_autoPROC}" in
         ;;
 esac 
 
+#Beam center
+if [ -n "${BEAM_X}" ]; then
+    BEAM="${BEAM_X} ${BEAM_Y}"
+else
+    BEAM=""
+fi
+
 #Optional parameters
 args=()
 
-for param in "autoPROC_XdsKeyword_ROTATION_AXIS=${ROTATION_AXIS}" "symm=${SPACE_GROUP}" "cell=${UNIT_CELL_CONSTANTS}"; do
+for param in "autoPROC_XdsKeyword_ROTATION_AXIS=${ROTATION_AXIS}" "symm=${SPACE_GROUP}" "cell=${UNIT_CELL_CONSTANTS}" "beam=${BEAM}"; do
     IFS="=" read -r key value <<< "$param"
     [ -n "$value" ] && args+=("$key=$value")
 done

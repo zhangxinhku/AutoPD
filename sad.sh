@@ -11,9 +11,6 @@ start_time=$(date +%s)
 
 #Input variables
 MTZ_IN=${1}
-SEQ=${2}
-ATOM=${3}
-scr_dir=${4}
 
 #Create folder for molecular replacement
 rm -rf SAD
@@ -46,7 +43,7 @@ for ((i=1; i<=num_mtz_files; i++)); do
   pip install gemmi > /dev/null
 
   # Run in background
-  ${scr_dir}/crank2.sh ${mtz_file} ${SEQ} ${ATOM} ${WAVELENGTH} > crank2.log &
+  ${SOURCE_DIR}/crank2.sh ${mtz_file} ${SEQUENCE} ${ATOM} ${WAVELENGTH} > crank2.log &
   echo "SAD_${i} started in background!"
   cd ..
 done

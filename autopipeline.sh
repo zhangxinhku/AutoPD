@@ -10,7 +10,7 @@
 start_time=$(date +%s)
 
 #Get AutoPD directory
-scr_dir=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SOURCE_DIR=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 #Input variables
 DATA_PATH=""
@@ -23,6 +23,8 @@ DATE=""
 Z=""
 ATOM=""
 SPACE_GROUP=""
+BEAM_X=""
+BEAM_Y=""
 
 for arg in "$@"; do
   if [[ "$arg" == *=* ]]; then
@@ -40,7 +42,8 @@ for arg in "$@"; do
       z) Z="$value";;                            #The number of asymmetric unit copies 
       atom) ATOM="$value";;                      #The atom type of anomalous scattering
       space_group) SPACE_GROUP="$value";;        #Space group
-      cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
+      beam_x) BEAM_X="$value" ;;                 #Beam center x
+      beam_y) BEAM_Y="$value" ;;                 #Beam center y
       *) echo "Invalid parameter: $arg" >&2; exit 1;;
     esac
   else
@@ -52,6 +55,14 @@ DATA_PATH=$(readlink -f "${DATA_PATH}")
 SEQUENCE=$(readlink -f "${SEQUENCE}")
 EXPERIMENT=$(readlink -f "${EXPERIMENT}")
 MR_TEMPLATE_PATH=$(readlink -f "${MR_TEMPLATE_PATH}")
+
+export SOURCE_DIR="${SOURCE_DIR}"
+export DATA_PATH="${DATA_PATH}"
+export SEQUENCE="${SEQUENCE}"
+export ROTATION_AXIS="${ROTATION_AXIS}"
+export BEAM_X="${BEAM_X}"
+export BEAM_Y="${BEAM_Y}"
+export ATOM="${ATOM}"
 
 #Create and enter folder for data processing
 if [ -d "$OUT_DIR" ]; then
@@ -142,13 +153,13 @@ if [ "${DR}" = "false" ] && [ "${MP}" = "false" ]; then
 elif [ "${DR}" = "false" ]; then
   echo ""
   echo "Data reduction will be skipped."
-  ${scr_dir}/search_model.sh ${scr_dir} ${SEQUENCE} ${DATE} | tee SEARCH_MODEL.log
+  ${SOURCE_DIR}/search_model.sh ${DATE} | tee SEARCH_MODEL.log
 elif [ "${MP}" = "false" ]; then
   echo ""
   echo "MrParse will be skipped."
-  ${scr_dir}/data_reduction.sh data_path=${DATA_PATH} source_dir=${scr_dir} rotation_axis=${ROTATION_AXIS} space_group=${SPACE_GROUP} | tee DATA_REDUCTION.log
+  ${SOURCE_DIR}/data_reduction.sh space_group=${SPACE_GROUP} | tee DATA_REDUCTION.log
 else    
-  parallel -u ::: "${scr_dir}/search_model.sh ${scr_dir} ${SEQUENCE} ${DATE} | tee SEARCH_MODEL.log" "${scr_dir}/data_reduction.sh data_path=${DATA_PATH} source_dir=${scr_dir} rotation_axis=${ROTATION_AXIS} space_group=${SPACE_GROUP} | tee DATA_REDUCTION.log"
+  parallel -u ::: "${SOURCE_DIR}/search_model.sh ${DATE} | tee SEARCH_MODEL.log" "${SOURCE_DIR}/data_reduction.sh space_group=${SPACE_GROUP} | tee DATA_REDUCTION.log"
 fi
 
 if [ ! -f "${SEQUENCE}" ]; then 
@@ -169,7 +180,7 @@ if [ "${SAD}" = "true" ]; then
     echo "                                             SAD                                             "
     echo "============================================================================================="
     
-    ${scr_dir}/sad.sh ${MTZ_IN} ${SEQUENCE} ${ATOM} ${scr_dir}
+    ${SOURCE_DIR}/sad.sh ${MTZ_IN}
     
     #Calculate and echo timing information
     end_time=$(date +%s)
@@ -195,7 +206,7 @@ echo "==========================================================================
 echo "                                    Molecular Replacement                                    "
 echo "============================================================================================="
 
-${scr_dir}/mr.sh ${SEQUENCE} ${MTZ_IN} ${Z}
+${SOURCE_DIR}/mr.sh ${MTZ_IN} ${Z}
 
 if [ -z "$(find PHASER_MR/MR_SUMMARY/ -maxdepth 1 -type f -name '*.pdb')" ]; then
     echo "ERROR: No pdb files found."
@@ -211,7 +222,7 @@ echo ""
 
 #Buccaneer
 echo "Buccaneer will be performed."
-${scr_dir}/buccaneer.sh ${SEQUENCE} ${scr_dir}
+${SOURCE_DIR}/buccaneer.sh
     
 if [ -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ]; then
     cp BUCCANEER/BUCCANEER_SUMMARY/* SUMMARY/
@@ -238,7 +249,7 @@ fi
 
 if [ ! -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ] || [ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ]; then
      echo "Phenix Autobuild will be performed."
-    "${scr_dir}/autobuild.sh" "${MTZ}" "${PDB}" "${SEQUENCE}"
+    "${SOURCE_DIR}/autobuild.sh" "${MTZ}" "${PDB}"
     
     if [ -f "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" ]; then
         cp AUTOBUILD/AUTOBUILD_SUMMARY/* SUMMARY/
@@ -251,7 +262,7 @@ if [ ! -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ] || [ "$(echo "${r_free} 
     if [ ! -f "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" ] || [ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ]; then
         echo ""
         echo "IPCAS 2.0 will be performed."
-        ${scr_dir}/ipcas.sh ${MTZ} ${PDB} ${SEQUENCE} 0.5 15 . > IPCAS.log
+        ${SOURCE_DIR}/ipcas.sh ${MTZ} ${PDB} ${SEQUENCE} 0.5 15 . > IPCAS.log
     
         echo ""
         cat IPCAS/result

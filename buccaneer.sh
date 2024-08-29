@@ -13,10 +13,6 @@ echo ""
 echo "----------------------------------------- Buccaneer -----------------------------------------"
 echo ""
 
-#Input variables
-SEQUENCE=$(readlink -f "${1}")
-scr_dir=${2}
-
 #Create folder for Buccaneer
 mkdir -p BUCCANEER
 cd BUCCANEER
@@ -50,7 +46,7 @@ do
         MTZ=$(readlink -f "$mtz_file")
     fi
     
-    ${scr_dir}/i2_buccaneer.sh ${MTZ} ${PDB} ${SEQUENCE} &
+    ${SOURCE_DIR}/i2_buccaneer.sh ${MTZ} ${PDB} ${SEQUENCE} &
 
     cd ..
     echo "Buccaneer ${i} started in background!"
@@ -66,7 +62,7 @@ best_r_free=99999
 best_i=0
 
 for i in $(seq 1 $pdb_count); do
-  grep 'R-work:' "BUCCANEER_$i/BUCCANEER.log" 2>/dev/null | sort -k4,4n | head -1 
+  grep 'R-work:' "BUCCANEER_$i/BUCCANEER.log" 2>/dev/null | sort -k4,4n -k2,2n | head -1 
   r_free=$(grep 'R-work:' "BUCCANEER_$i/BUCCANEER.log" 2>/dev/null | sort -k4,4n | head -1 | awk '{print $4}')
   r_free=${r_free:-99999}
   

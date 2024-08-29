@@ -7,19 +7,14 @@
 # Last Modified: 2024-03-05
 #############################################################################################################
 
-#Input variables
-DATAPATH=${1}
-file_type=${2}
-
-#file_name=$(find ${DATAPATH} -type f -name "*master.h5" -printf "%f")
 #Use dials.import to show header information of diffraction data
-case "${file_type}" in
+case "${FILE_TYPE}" in
   "h5")
-    file_name=$(find "${DATAPATH}" -maxdepth 1 -type f ! -name '.*' -name "*master.h5" -printf "%f")
-    dials.import ${DATAPATH}/${file_name} > /dev/null
+    file_name=$(find "${DATA_PATH}" -maxdepth 1 -type f ! -name '.*' -name "*master.h5" -printf "%f")
+    dials.import ${DATA_PATH}/${file_name} > /dev/null
     ;;
   *)
-    dials.import ${DATAPATH} > /dev/null
+    dials.import ${DATA_PATH} > /dev/null
     ;;
 esac
 dials.show imported.expt > imported.txt
@@ -31,7 +26,7 @@ echo "==========================================================================
 echo ""
 echo "------------------------------------- Header information ------------------------------------"
 echo ""
-echo "Location of raw images              = ${DATAPATH}"
+echo "Location of raw images              = ${DATA_PATH}"
 number_of_images=$(grep "number of images" imported.txt | awk '{print $4}')
 echo "Number of images                    = ${number_of_images}"
 image_range=$(grep "image range" imported.txt | cut -d '{' -f2 | cut -d '}' -f1)

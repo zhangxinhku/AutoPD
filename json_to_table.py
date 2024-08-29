@@ -59,7 +59,7 @@ def json_to_txt(json_file_path, cutoff_date=None):
             data = [item for item in data if datetime.strptime(item['release_date'], "%Y-%m-%d") < cutoff_date_obj]
 
     elif file_name == 'af_models.json':
-        fields = ['name', 'seq_ident', 'region_id', 'range', 'length', 'avg_plddt', 'h_score']
+        fields = ['name', 'seq_ident', 'region_id', 'range', 'length', 'h_score', 'avg_plddt']
         # Sort the data
         data.sort(key=lambda x: (x['seq_ident'], x['avg_plddt']), reverse=True)
 

@@ -13,9 +13,6 @@ start_time=$(date +%s)
 for arg in "$@"; do
     IFS="=" read -r key value <<< "$arg"
     case $key in
-        data_path) DATA_PATH="$value" ;;
-        rotation_axis) ROTATION_AXIS="$value" ;;
-        source_dir) SOURCE_DIR="$value" ;;
         space_group) SPACE_GROUP="$value" ;;
         cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
     esac
@@ -24,13 +21,14 @@ done
 #Optional parameters
 args=()
 
-for param in "rotation_axis=${ROTATION_AXIS}" "sp=${SPACE_GROUP}" "cell_constants=${UNIT_CELL_CONSTANTS}"; do
+for param in "sp=${SPACE_GROUP}" "cell_constants=${UNIT_CELL_CONSTANTS}"; do
     IFS="=" read -r key value <<< "$param"
     [ -n "$value" ] && args+=("$key=$value")
 done
 
 #Determine file type
 FILE_TYPE=$(find "${DATA_PATH}" -maxdepth 1 -type f ! -name '.*' | head -n 1 | awk -F. '{if (NF>1) print $NF}')
+export FILE_TYPE="${FILE_TYPE}"
 
 #Create and enter folder for data reduction
 mkdir -p DATA_REDUCTION
@@ -38,14 +36,15 @@ cd DATA_REDUCTION
 mkdir -p DATA_REDUCTION_SUMMARY
 
 #Extract header information
-${SOURCE_DIR}/header.sh ${DATA_PATH} ${FILE_TYPE} > header.log
+${SOURCE_DIR}/header.sh > header.log
 
 #First round data processing
 echo ""
 echo "-------------------------------- First round data processing --------------------------------"
 echo ""
 ROUND=1
-parallel -u ::: "${SOURCE_DIR}/xds.sh data_path=${DATA_PATH} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} ${args[@]}" "${SOURCE_DIR}/xds_xia2.sh data_path=${DATA_PATH} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} ${args[@]}" "${SOURCE_DIR}/dials_xia2.sh data_path=${DATA_PATH} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} ${args[@]}" "${SOURCE_DIR}/autoproc.sh data_path=${DATA_PATH} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} ${args[@]}"
+
+parallel -u "{}" ::: "${SOURCE_DIR}/xds.sh round=${ROUND} ${args[@]}" "${SOURCE_DIR}/xds_xia2.sh round=${ROUND} ${args[@]}" "${SOURCE_DIR}/dials_xia2.sh round=${ROUND} ${args[@]}" "${SOURCE_DIR}/autoproc.sh round=${ROUND} ${args[@]}"
 
 #Set Flags
 FLAG_XDS=$(grep 'FLAG_XDS=' temp.txt | cut -d '=' -f 2)
@@ -76,7 +75,7 @@ else
 fi
 echo ""
 ROUND=2
-parallel -u ::: "${SOURCE_DIR}/xds.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} flag=${FLAG_XDS} sp_number=${SPACE_GROUP_NUMBER} cell_constants=\"${UNIT_CELL_CONSTANTS}\"" "${SOURCE_DIR}/xds_xia2.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} flag=${FLAG_XDS_XIA2} sp=${SPACE_GROUP} cell_constants=\"${UNIT_CELL_CONSTANTS}\"" "${SOURCE_DIR}/dials_xia2.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} flag=${FLAG_DIALS_XIA2} sp=${SPACE_GROUP} cell_constants=\"${UNIT_CELL_CONSTANTS}\"" "${SOURCE_DIR}/autoproc.sh data_path=${DATA_PATH} rotation_axis=${ROTATION_AXIS} round=${ROUND} source_dir=${SOURCE_DIR} file_type=${FILE_TYPE} flag=${FLAG_autoPROC} sp=\"\\\"$SPACE_GROUP\\\"\" cell_constants=\"\\\"$UNIT_CELL\\\"\""
+parallel -u ::: "${SOURCE_DIR}/xds.sh round=${ROUND} flag=${FLAG_XDS} sp_number=${SPACE_GROUP_NUMBER} cell_constants=\"${UNIT_CELL_CONSTANTS}\"" "${SOURCE_DIR}/xds_xia2.sh round=${ROUND} flag=${FLAG_XDS_XIA2} sp=${SPACE_GROUP} cell_constants=\"${UNIT_CELL_CONSTANTS}\"" "${SOURCE_DIR}/dials_xia2.sh round=${ROUND} flag=${FLAG_DIALS_XIA2} sp=${SPACE_GROUP} cell_constants=\"${UNIT_CELL_CONSTANTS}\"" "${SOURCE_DIR}/autoproc.sh round=${ROUND} flag=${FLAG_autoPROC} sp=\"\\\"$SPACE_GROUP\\\"\" cell_constants=\"\\\"$UNIT_CELL\\\"\""
 
 #Output summary results
 echo ""

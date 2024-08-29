@@ -10,9 +10,7 @@
 start_time=$(date +%s)
 
 #Input variables
-scr_dir=${1}
-SEQUENCE=${2}
-DATE=${3}
+DATE=${1}
 
 #Create folder for search models
 mkdir -p MRPARSE PREDICT_MODELS
@@ -52,7 +50,7 @@ for i in $(seq 0 $((${seq_count}-1))); do
     echo "No AF models were found."
   else
     cp models/*.pdb all_models
-    python3 ${scr_dir}/json_to_table.py af_models.json 
+    python3 ${SOURCE_DIR}/json_to_table.py af_models.json 
   fi
   
   if [ ! -d "homologs" ] || [ -z "$(ls -A homologs)" ]; then
@@ -62,7 +60,7 @@ for i in $(seq 0 $((${seq_count}-1))); do
     cp homologs/*.pdb all_models
     if ! grep -qE '^\s*\[\s*\]\s*$' homologs.json; then
       #The homologs.jason is not empty
-      python3 ${scr_dir}/json_to_table.py homologs.json ${DATE}
+      python3 ${SOURCE_DIR}/json_to_table.py homologs.json ${DATE}
     else
       #The homologs.jason is empty
       for file in "homologs"/*; do
@@ -89,7 +87,7 @@ for i in $(seq 0 $((${seq_count}-1))); do
   cat af_models.txt homologs.txt > summary.txt
   
   if [ -s summary.txt ]; then
-    sort -k2 -nr summary.txt -o summary.txt
+    sort -k2,2nr -k7,7nr -k6,6nr summary.txt -o summary.txt
     awk 'BEGIN { OFS="\t" } { printf "%-15s %-10s %-5s %-15s %-10s %-25s %-10s\n", $1, $2, $3, $4, $5, $6, $7 }' summary.txt > temp.txt && mv temp.txt summary.txt
     model_name=$(head -1 summary.txt | awk '{print $1}')
     file_name=$(echo all_models/${model_name}_* | cut -d ' ' -f 1)

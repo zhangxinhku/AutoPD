@@ -11,11 +11,7 @@
 for arg in "$@"; do
     IFS="=" read -r key value <<< "$arg"
     case $key in
-        data_path) DATA_PATH="$value" ;;
-        rotation_axis) ROTATION_AXIS="$value" ;;
         round) ROUND="$value" ;;
-        source_dir) SOURCE_DIR="$value" ;;
-        file_type) FILE_TYPE="$value" ;;
         flag) FLAG_XDS_XIA2="$value" ;;
         sp) SPACE_GROUP="$value" ;;
         cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
@@ -35,6 +31,17 @@ case "${FLAG_XDS_XIA2}" in
         ;;
 esac
 
+#Beam center
+if [ -n "${BEAM_X}" ]; then
+    PIXEL_X=$(grep "Pixel size (X,Y)" header.log | awk '{print $6}' | cut -d ',' -f1)
+    PIXEL_Y=$(grep "Pixel size (X,Y)" header.log | awk '{print $6}' | cut -d ',' -f2)
+    BEAM_X=$(echo "scale=2; ${BEAM_X}*${PIXEL_X}" | bc)
+    BEAM_Y=$(echo "scale=2; ${BEAM_Y}*${PIXEL_Y}" | bc)
+    BEAM=${BEAM_X},${BEAM_Y}
+else
+    BEAM=""
+fi
+
 #Create folder for xia2-dials
 cd XDS_XIA2
 mkdir -p XDS_XIA2_${ROUND}
@@ -43,7 +50,7 @@ cd XDS_XIA2_${ROUND}
 #Optional parameters
 args=()
 
-for param in "goniometer.axes=${ROTATION_AXIS}" "xia2.settings.space_group=${SPACE_GROUP}" "xia2.settings.unit_cell=${UNIT_CELL_CONSTANTS}"; do
+for param in "goniometer.axes=${ROTATION_AXIS}" "xia2.settings.space_group=${SPACE_GROUP}" "xia2.settings.unit_cell=${UNIT_CELL_CONSTANTS}" "mosflm_beam_centre=${BEAM}"; do
     IFS="=" read -r key value <<< "$param"
     [ -n "$value" ] && args+=("$key=$value")
 done

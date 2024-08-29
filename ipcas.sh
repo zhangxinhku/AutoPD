@@ -48,7 +48,7 @@ then
 fi
 mkdir $out_dir
 
-${scr_dir}/ipcas_mtz.sh ${1} ${1}  FP SIGFP FreeR_flag #FP SIGFP FREE
+${scr_dir}/ipcas_mtz.sh ${1} ${1}  F SIGF FreeR_flag #FP SIGFP FREE
 
 # run cycle
 num=1
