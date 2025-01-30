@@ -17,7 +17,7 @@ for arg in "$@"; do
         round) ROUND="$value" ;;
         flag) FLAG_XDS="$value" ;;
         sp) SPACE_GROUP="$value" ;;
-        sp_number) SPACE_GROUP_NUMBER="$value" ;;
+        #sp_number) SPACE_GROUP_NUMBER="$value" ;;
         cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
     esac
 done
@@ -107,8 +107,12 @@ if [ -n "${ROTATION_AXIS}" ]; then
 fi
 
 #Space group and unit cell
-if [ -n "${SPACE_GROUP_NUMBER}" ]; then
+if [ -n "${SPACE_GROUP}" ]; then
+    SPACE_GROUP_NUMBER=$(${SOURCE_DIR}/get_sg_number.sh "${SPACE_GROUP}")
     sed -i "s/SPACE_GROUP_NUMBER=.*$/SPACE_GROUP_NUMBER=${SPACE_GROUP_NUMBER}/g" XDS.INP
+fi
+
+if [ -n "${UNIT_CELL_CONSTANTS}" ]; then
     sed -i "s/UNIT_CELL_CONSTANTS=.*$/UNIT_CELL_CONSTANTS=${UNIT_CELL_CONSTANTS}/g" XDS.INP
 fi
 
@@ -225,7 +229,7 @@ cp XDS.INP INTEGRATE.INP
 cp INTEGRATE.INP 6_INTEGRATE.INP
 cp INTEGRATE.log 6_INTEGRATE.log
 cp INTEGRATE.LP 6_INTEGRATE.LP
-cp INTEGRATE.HKL 6_INTEGRATE.HKL
+cp INTEGRATE.HKL 6_INTEGRATE.HKL 2>/dev/null
 cat INTEGRATE.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
@@ -254,7 +258,6 @@ echo "" >> XDS_${ROUND}.log
 cp 4_IDXREF.INP XDS.INP
 if [ -n "${SPACE_GROUP}" ]; then
     SPACE_GROUP_NUMBER=$(${SOURCE_DIR}/get_sg_number.sh "${SPACE_GROUP}")
-    sed -i "s/SPACE_GROUP_NUMBER=.*$/SPACE_GROUP_NUMBER=${SPACE_GROUP_NUMBER}/g" XDS.INP
 else
     SPACE_GROUP_NUMBER=$(awk 'NR == 4 {print $1}' 7_GXPARM.XDS)
 fi
@@ -297,7 +300,7 @@ cp XDS.INP INTEGRATE.INP
 cp INTEGRATE.INP 10_INTEGRATE.INP
 cp INTEGRATE.log 10_INTEGRATE.log
 cp INTEGRATE.LP 10_INTEGRATE.LP
-cp INTEGRATE.HKL 10_INTEGRATE.HKL
+cp INTEGRATE.HKL 10_INTEGRATE.HKL 2>/dev/null
 cat INTEGRATE.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
@@ -382,6 +385,16 @@ cp aimless.xml 16_aimless.xml
 cat aimless.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
+Rmerge_XDS=$(grep 'Rmerge  (all I+ and I-)' 16_aimless.log | awk '{print $6}')
+Rmerge_XDS=${Rmerge_XDS:-0}
+
+if [ "$(echo "${Rmerge_XDS} <= 0" | bc)" -eq 1 ]; then
+    FLAG_XDS=0
+    echo "FLAG_XDS=${FLAG_XDS}" >> ../../temp.txt
+    echo "Round ${ROUND} XDS processing failed!"
+    exit 1
+fi
+
 #17_ctruncate
 {
 ctruncate -mtzin XDS.mtz -mtzout XDS_truncated.mtz -colin '/*/*/[IMEAN,SIGIMEAN]' -colano '/*/*/[I(+),SIGI(+),I(-),SIGI(-)]' > ctruncate.log
@@ -439,11 +452,13 @@ if [ "${Rmerge_XDS}" = "" ];then
     FLAG_XDS=0
     echo "Round ${ROUND} XDS processing failed!"
     mv XDS_SUMMARY/XDS_SUMMARY.log XDS_${ROUND}/XDS_SUMMARY.log
+    rm XDS_SUMMARY/*
     exit
-elif [ $(echo "${Rmerge_XDS} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_XDS} >= 2" | bc) -eq 1 ];then
+elif [ $(echo "${Rmerge_XDS} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_XDS} >= 100" | bc) -eq 1 ];then
     FLAG_XDS=0
     echo "Round ${ROUND} XDS processing failed!"
     mv XDS_SUMMARY/XDS_SUMMARY.log XDS_${ROUND}/XDS_SUMMARY.log
+    rm XDS_SUMMARY/*
     exit
 else
     FLAG_XDS=1

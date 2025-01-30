@@ -71,7 +71,7 @@ run_xia2_with_timeout() {
 
     while kill -0 $cmd_pid 2> /dev/null; do
       if [[ -e "xia2-error.txt" ]]; then
-        echo "Error detected: Round ${ROUND} XDS_XIA2 ${pipeline} processing failed!"
+        #echo "Error detected: Round ${ROUND} XDS_XIA2 ${pipeline} processing failed!"
         kill $cmd_pid > /dev/null 2>&1
         return 1 # Signal failure
       fi
@@ -141,7 +141,7 @@ if [ "${Rmerge_XDS_XIA2}" = "" ];then
     echo "Round ${ROUND} XDS_XIA2 processing failed!"
     rm XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log
     exit
-elif [ $(echo "${Rmerge_XDS_XIA2} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_XDS_XIA2} >= 2" | bc) -eq 1 ];then
+elif [ $(echo "${Rmerge_XDS_XIA2} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_XDS_XIA2} >= 100" | bc) -eq 1 ];then
     FLAG_XDS_XIA2=0
     echo "Round ${ROUND} XDS_XIA2 processing failed!"
     rm XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log

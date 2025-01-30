@@ -13,19 +13,22 @@ start_time=$(date +%s)
 MTZ_IN=${1}
 Z_NUMBER=${2}
 
-#Determine the number of search models
-TEMPLATE_NUMBER=$(ls SEARCH_MODELS/*.pdb | wc -l)
-
 #Rename search models
-counter=1
-for file in SEARCH_MODELS/*.pdb; do
-    new_name="SEARCH_MODELS/ENSEMBLE${counter}.pdb"
-    mv -f "$file" "$new_name" 2>/dev/null || true
-    let counter+=1
-done
+rename_pdb_files() {
+  local directory=$1
+  if [ -d "$directory" ] && [ "$(ls -A "$directory")" ]; then
+    local counter=1
+    for file in "$directory"/*.pdb; do
+      new_name="$directory/ENSEMBLE${counter}.pdb"
+      mv -f "$file" "$new_name" 2>/dev/null || true
+      ((counter++))
+    done
+  fi
+}
 
-echo ""
-echo "MR template number: ${TEMPLATE_NUMBER}"
+rename_pdb_files "SEARCH_MODELS/INPUT_MODELS"
+rename_pdb_files "SEARCH_MODELS/HOMOLOGS"
+rename_pdb_files "SEARCH_MODELS/AF_MODELS"
 
 #Create folder for molecular replacement
 rm -rf PHASER_MR
@@ -33,112 +36,84 @@ mkdir -p PHASER_MR
 cd PHASER_MR
 mkdir MR_SUMMARY
 
+echo ""
 echo "------------------------------------------Phaser MR------------------------------------------"
 echo ""
 
 #Get mtz files folder
 if [ "${MTZ_IN}" -eq 1 ]; then
-  summary_dir=$(realpath ../INPUT_FILES)
+  mtz_dir=$(realpath ../INPUT_FILES)
 else
-  summary_dir=$(realpath ../DATA_REDUCTION/DATA_REDUCTION_SUMMARY)
+  mtz_dir=$(realpath ../DATA_REDUCTION/DATA_REDUCTION_SUMMARY)
 fi
 
 #Do MR for each file in mtz folder
-mtz_files=($(ls "${summary_dir}"/*.mtz))
-num_mtz_files=${#mtz_files[@]}
-
-solution_num=0
-
-for ((i=1; i<=num_mtz_files; i++)); do
-  mtz_file=${mtz_files[$i-1]}
-  ${SOURCE_DIR}/ipcas_mtz.sh ${mtz_file} ${mtz_file}  F SIGF FreeR_flag > /dev/null 2>&1 #FP SIGFP FREE
-  mkdir -p MR_$i
-  cd MR_$i
-  cp ${mtz_file} .
-  
-  if [[ -z "${Z_NUMBER}" ]]; then
-    #phaser_cca
-    phaser << eof > phaser_cca.log
-    TITLE phaser_cca
-    MODE CCA
-    ROOT PHASER_CCA
-    HKLIN ${mtz_file}
-    LABIN F=FP SIGF=SIGFP
-    COMPOSITION BY ASU
-    COMPOSITION PROTEIN SEQ ${SEQUENCE} NUM 1
-eof
-
-    #Extract NUMBER from phaser_cca result
-    CCA_EXIT_STATUS=$(grep 'EXIT STATUS:' phaser_cca.log | awk '{print $3}')
-
-    Z_NUMBER=$(awk '/loggraph/{flag=1;next}/\$\$/{flag=0}flag' phaser_cca.log | sort -k2,2nr | head -n 1 | awk '{print $1}')
-
-    echo ""
-    echo "MR_$i Phaser CCA EXIT STATUS: ${CCA_EXIT_STATUS}"
-    
-    if [ ${CCA_EXIT_STATUS} == "FAILURE" ]; then
-      exit 1
-    else
-      echo "MR_$i Most probable Z=${Z_NUMBER}"
-      echo ""
-    fi
-  else
-    echo "Input Z=${Z_NUMBER}"
-  fi
-
-  echo "TITLE phaser_mr
-MODE MR_AUTO
-ROOT PHASER
-HKLIN ${mtz_file}
-LABIN F=FP SIGF=SIGFP
-SGALTERNATIVE SELECT ALL" > phaser_input.txt
-
-  for ((j=1; j<=${TEMPLATE_NUMBER}; j++)); do
-    first_line=$(head -n 1 ../../SEARCH_MODELS/ENSEMBLE${j}.pdb)
-    
-    if [[ $first_line == *ID* ]]; then
-      IDENTITY=$(echo "$first_line" | awk -F 'ID ' '{print $2}')
-    else
-      IDENTITY=90
-    fi
-    echo "ENSEMBLE ensemble${j} PDB ../../SEARCH_MODELS/ENSEMBLE${j}.pdb IDENTITY ${IDENTITY}" >> phaser_input.txt
-  done
-
-  echo "COMPOSITION BY ASU" >> phaser_input.txt
-  echo "COMPOSITION PROTEIN SEQ ${SEQUENCE} NUM ${Z_NUMBER}" >> phaser_input.txt
-
-  for ((j=1; j<=TEMPLATE_NUMBER; j++)); do
-    echo "SEARCH ENSEMBLE ensemble${j} NUM ${Z_NUMBER}" >> phaser_input.txt
-  done
-
-  phaser < phaser_input.txt > phaser_mr.log &
-
-  cd ..
-  Z_NUMBER=""
-done
-#IDENTITY ${IDENTITY}
-wait 
-
-echo ""
-echo "${num_mtz_files} Phaser tasks are completed."
-echo ""
+#Determine the number of search models
+if [ -d "../SEARCH_MODELS/INPUT_MODELS" ] && [ "$(ls -A ../SEARCH_MODELS/INPUT_MODELS)" ]; then
+  TEMPLATE_NUMBER=$(ls ../SEARCH_MODELS/INPUT_MODELS/*.pdb | wc -l)
+  ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER} "${mtz_dir}" ../SEARCH_MODELS/INPUT_MODELS I ${Z_NUMBER}
+elif [ -d "../SEARCH_MODELS/HOMOLOGS" ] && [ "$(ls -A ../SEARCH_MODELS/HOMOLOGS)" ]; then
+  TEMPLATE_NUMBER_H=$(ls ../SEARCH_MODELS/HOMOLOGS/*.pdb | wc -l)
+  TEMPLATE_NUMBER_AF=$(ls ../SEARCH_MODELS/AF_MODELS/*.pdb | wc -l)
+  parallel -u ::: "${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER_H} "${mtz_dir}" ../SEARCH_MODELS/HOMOLOGS H ${Z_NUMBER}" "${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER_AF} "${mtz_dir}" ../SEARCH_MODELS/AF_MODELS A ${Z_NUMBER}"
+else
+  TEMPLATE_NUMBER=$(ls ../SEARCH_MODELS/AF_MODELS/*.pdb | wc -l)
+  ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER} "${mtz_dir}" ../SEARCH_MODELS/AF_MODELS A ${Z_NUMBER}
+fi
 
 #Extract and show MR results
-for (( i=1; i<=num_mtz_files; i++ ))
-do
-    if [ -f "MR_$i/PHASER.1.pdb" ]; then
-        ((solution_num++))
-        cp "MR_$i/phaser_cca.log" "MR_SUMMARY/phaser_cca_${i}.log"
-        cp "MR_$i/PHASER.1.pdb" "MR_SUMMARY/Phaser_${i}.pdb"
-        cp "MR_$i/PHASER.1.mtz" "MR_SUMMARY/Phaser_${i}.mtz" 2>/dev/null
-        cp "MR_$i/phaser_mr.log" "MR_SUMMARY/phaser_mr_${i}.log"
-        MR_EXIT_STATUS=$(grep 'EXIT STATUS:' MR_$i/phaser_mr.log | awk '{print $3}')
-	echo "MR_$i Phaser MR EXIT STATUS: ${MR_EXIT_STATUS}"
-    fi
+> MR_SUMMARY/MR_SUMMARY.txt
+for dir in ./*/; do
+  folder_name=$(basename "$dir")
+  if [ -f "$folder_name/PHASER.1.pdb" ]; then
+    LLG=$(head -n 5 "$folder_name/PHASER.sol" | grep -o 'LLG=[0-9]*' | sed 's/LLG=//g' | sort -nr | head -n 1)
+    TFZ=$(head -n 5 "$folder_name/PHASER.sol" | grep -o 'TFZ==\?[0-9]*\(\.[0-9]*\)\?' | sed 's/TFZ==\?//g' | sort -nr | head -n 1)
+    SG=$(grep -m 1 "SOLU SPAC" "$folder_name/PHASER.sol" | awk '{print $3, $4, $5, $6}' | tr -d ' ')
+    PG=$(${SOURCE_DIR}/sg2pg.sh ${SG})
+    echo "$folder_name $LLG $SG $PG $TFZ" >> MR_SUMMARY/MR_SUMMARY.txt
+  fi
 done
 
-if [ $solution_num -eq 0 ]; then
-    echo "No MR solution!"
+if [ -s "MR_SUMMARY/MR_SUMMARY.txt" ]; then
+  sort -k2,2nr "MR_SUMMARY/MR_SUMMARY.txt" | awk '
+  {
+    if (!($3 in seen)) {
+        print $0
+        seen[$3] = 1
+    }
+  }
+  ' > MR_SUMMARY/MR_BEST.txt
+  echo ""
+  echo "MR Results:"
+  awk '{print $1, "LLG="$2, "TFZ="$5, "Space Group: "$3}' MR_SUMMARY/MR_BEST.txt
+  #!/bin/bash
+  awk '{print $1}' "MR_SUMMARY/MR_BEST.txt" | while read -r folder_name; do
+    PDB=$(readlink -f "$folder_name/PHASER.1.pdb")
+    if [ -f "$folder_name/PHASER.1.mtz" ]; then
+        MTZ=$(readlink -f "$folder_name/PHASER.1.mtz")
+    else
+        MTZ=$(find "$folder_name" -name "*.mtz" -print -quit | xargs realpath)
+    fi
+
+    cd "$folder_name" || exit
+    ${SOURCE_DIR}/refine.sh "${MTZ}" "${PDB}"
+    cd ..
+
+    r_work="N/A"
+    r_free="N/A"
+    if [ -f "$folder_name/REFINEMENT/XYZOUT.pdb" ]; then
+        r_work=$(grep 'R VALUE            (WORKING SET) :' "$folder_name/REFINEMENT/XYZOUT.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
+        r_free=$(grep 'FREE R VALUE                     :' "$folder_name/REFINEMENT/XYZOUT.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
+    fi
+    
+    cp -r "$folder_name" "MR_SUMMARY/"
+
+    awk -v folder="$folder_name" -v r_work="$r_work" -v r_free="$r_free" '
+    $1 == folder {print $0, r_work, r_free; next} {print}
+    ' MR_SUMMARY/MR_BEST.txt > MR_SUMMARY/MR_BEST.tmp && mv MR_SUMMARY/MR_BEST.tmp MR_SUMMARY/MR_BEST.txt
+  done
+else
+  echo "No MR solution!"
 fi
 
 #Calculate and echo timing information
@@ -148,10 +123,8 @@ hours=$((total_time / 3600))
 minutes=$(( (total_time % 3600) / 60 ))
 seconds=$((total_time % 60))
 
-echo "" | tee -a phaser_mr.log
-echo "Molecular replacement took: ${hours}h ${minutes}m ${seconds}s" | tee -a phaser_mr.log
-
-mv phaser_mr.log MR_SUMMARY/
+echo "" | tee -a MR_SUMMARY/phaser_mr.log
+echo "Molecular replacement took: ${hours}h ${minutes}m ${seconds}s" | tee -a MR_SUMMARY/phaser_mr.log
 
 #Go to data processing folder
 cd ..

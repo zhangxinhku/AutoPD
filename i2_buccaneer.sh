@@ -10,7 +10,6 @@
 #Input variables
 MTZ=$(readlink -f "${1}")
 PDB=$(readlink -f "${2}")
-SEQ_FILE=$(readlink -f "${3}")
 
 #Extract sequence from sequence file
 sequence=""
@@ -21,7 +20,7 @@ do
     then
         sequence+="$line"
     fi
-done < "${SEQ_FILE}"
+done < "${SEQUENCE}"
 
 #Determine ASU contents
 $CCP4/lib/python3.9/site-packages/ccp4i2/bin/i2run ProvideAsuContents \
@@ -37,10 +36,10 @@ ASU=$(readlink -f ASUCONTENTFILE.asu.xml)
 $CCP4/lib/python3.9/site-packages/ccp4i2/bin/i2run buccaneer_build_refine_mr \
 	--F_SIGF \
 		fullPath=${MTZ} \
-		columnLabels="/*/*/[FP,SIGFP]" \
+		columnLabels="/*/*/[F,SIGF]" \
 	--FREERFLAG \
 		fullPath=${MTZ} \
-		columnLabels="/*/*/[FREE]" \
+		columnLabels="/*/*/[FreeR_flag]" \
 	--ASUIN ${ASU} \
 	--BUCCANEER_MR_MODE_XYZIN ${PDB} \
 	--noDb &> BUCCANEER.log

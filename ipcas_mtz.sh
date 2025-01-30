@@ -16,7 +16,7 @@
 ##############################################
 
 # input check
-if [ $# != 5 ]
+if [ $# != 8 ]
 then
     echo "mtzin mtzout FP SIGFP FREE"
     exit
@@ -30,9 +30,9 @@ labin file 1 -
     E2 = $3 -
     E3 = $4
 labout file 1 -
-    E1 = FREE -
-    E2 = FP -
-    E3 = SIGFP
+    E1 = $8 -
+    E2 = $6 -
+    E3 = $7
 ctypin file 1 -
     E1 = I -
     E2 = F -

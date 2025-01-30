@@ -18,66 +18,74 @@ mkdir -p BUCCANEER
 cd BUCCANEER
 mkdir -p BUCCANEER_SUMMARY
 
-#Determine the number of Buccaneer tasks
-pdb_count=$(find ../PHASER_MR -mindepth 1 -maxdepth 1 -type d | wc -l | awk '{print $1-1}')
-
-#Perform Buccaneer jobs for every MR solutions
-for (( i=1; i<=pdb_count; i++ ))
-do
-    mkdir -p BUCCANEER_${i}
-    cd BUCCANEER_${i}
-
-    if [ ! -f "../../PHASER_MR/MR_SUMMARY/Phaser_${i}.pdb" ]; then
-        echo "Phaser_${i}.pdb does not exist, skipping..."
-        cd ..
-        continue
-    fi
+start_dir=$(pwd)
+for folder in ../PHASER_MR/MR_SUMMARY/*; do
+  if [ -d "$folder" ]; then
+    folder_path=$(realpath "$folder")
+    folder_name=$(basename "$folder")
+    mkdir -p "BUCCANEER_${folder_name}"
+    cd "BUCCANEER_${folder_name}" || exit
     
-    PDB=$(readlink -f "../../PHASER_MR/MR_SUMMARY/Phaser_${i}.pdb")
-    
-    if [ -f "../../PHASER_MR/MR_SUMMARY/Phaser_${i}.mtz" ]; then
-        MTZ=$(readlink -f "../../PHASER_MR/MR_SUMMARY/Phaser_${i}.mtz")
-    elif [ -d "../../DATA_REDUCTION" ] && find ../../DATA_REDUCTION -type f -name '*.mtz' | read -r; then
-        summary_dir=$(realpath ../../DATA_REDUCTION/DATA_REDUCTION_SUMMARY)
-        mtz_files=($(ls "${summary_dir}"/*.mtz))
-        MTZ=${mtz_files[$i-1]}
+    if [ -f "${folder_path}/REFINEMENT/XYZOUT.pdb" ]; then
+        PDB=$(readlink -f "${folder_path}/REFINEMENT/XYZOUT.pdb")
     else
-        mtz_file=$(find "../../INPUT_FILES" -name '*.mtz' -print -quit)
-        MTZ=$(readlink -f "$mtz_file")
+        PDB=$(readlink -f "${folder_path}/PHASER.1.pdb")
     fi
     
-    ${SOURCE_DIR}/i2_buccaneer.sh ${MTZ} ${PDB} ${SEQUENCE} &
-
-    cd ..
-    echo "Buccaneer ${i} started in background!"
+    if [ -f "${folder_path}/PHASER.1.mtz" ]; then
+        MTZ=$(readlink -f "${folder_path}/PHASER.1.mtz")
+    else
+        MTZ=$(find ${folder_path} -name "*.mtz" -print -quit)
+    fi
+    
+    ${SOURCE_DIR}/i2_buccaneer.sh ${MTZ} ${PDB} &
+    cd "$start_dir" || exit
+  fi
 done
 
 wait
-
 echo "All Buccaneer processes finished!"
 echo ""
 
-#Determine the best Buccaneer result by Rfree
+cd "$start_dir" || exit
 best_r_free=99999
-best_i=0
 
-for i in $(seq 1 $pdb_count); do
-  grep 'R-work:' "BUCCANEER_$i/BUCCANEER.log" 2>/dev/null | sort -k4,4n -k2,2n | head -1 
-  r_free=$(grep 'R-work:' "BUCCANEER_$i/BUCCANEER.log" 2>/dev/null | sort -k4,4n | head -1 | awk '{print $4}')
-  r_free=${r_free:-99999}
+for folder in BUCCANEER_MR*; do
+  if [ -d "$folder" ]; then
+    folder_name=$(basename "$folder")
+    r_work=$(grep 'R VALUE            (WORKING SET) :' "$folder_name/XYZOUT.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
+    r_free=$(grep 'FREE R VALUE                     :' "$folder_name/XYZOUT.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
+    echo "$folder_name: R-work=$r_work  R-free=$r_free"
+    r_free=${r_free:-99999}
   
-  if (( $(echo "$r_free < $best_r_free" | bc -l) )); then
-    best_r_free=$r_free
-    best_i=$i
+    if (( $(echo "$r_free < $best_r_free" | bc -l) )); then
+      best_r_free=$r_free
+      best="${folder_name#*_}"
+    fi
   fi
 done
 
 #Output Buccaneer results
-if [ $best_i -ne 0 ]; then
-  cp "BUCCANEER_${best_i}/BUCCANEER.log" BUCCANEER_SUMMARY/
-  cp "BUCCANEER_${best_i}/XYZOUT.pdb" BUCCANEER_SUMMARY/BUCCANEER.pdb
-  cp "BUCCANEER_${best_i}/FPHIOUT.mtz" BUCCANEER_SUMMARY/BUCCANEER.mtz
-  echo "Best R-free $best_r_free is from BUCCANEER ${best_i}" | tee -a BUCCANEER_SUMMARY/BUCCANEER.log
+if [ -n "$best" ]; then
+  cp "BUCCANEER_${best}/BUCCANEER.log" BUCCANEER_SUMMARY/
+  cp "BUCCANEER_${best}/XYZOUT.pdb" BUCCANEER_SUMMARY/BUCCANEER.pdb
+  cp "BUCCANEER_${best}/FPHIOUT.mtz" BUCCANEER_SUMMARY/BUCCANEER.mtz
+  echo "Best R-free $best_r_free is from BUCCANEER_${best}" | tee -a BUCCANEER_SUMMARY/BUCCANEER.log
+  cp BUCCANEER_SUMMARY/* ../SUMMARY/
+  cp ../PHASER_MR/MR_SUMMARY/${best}/*.* ../SUMMARY/
+  cp ../PHASER_MR/MR_SUMMARY/${best}/REFINEMENT/XYZOUT.pdb ../SUMMARY/REFINEMENT.pdb
+  cp ../PHASER_MR/MR_SUMMARY/${best}/REFINEMENT/FPHIOUT.mtz ../SUMMARY/REFINEMENT.mtz
+    
+  if [ -d "../DATA_REDUCTION" ]; then
+    dr_name=$(find "../PHASER_MR/MR_SUMMARY/${best}" -maxdepth 1 -type f -name "*.mtz" ! -name "PHASER.1.mtz" -exec basename {} \; | sed 's/\.mtz$//' | head -n 1)
+    cp ../DATA_REDUCTION/DATA_REDUCTION_SUMMARY/${dr_name}_SUMMARY.log ../SUMMARY/
+  fi
+    
+  if [[ "$best" == MR_A* ]]; then
+    cp ../SEARCH_MODELS/AF_MODELS/* ../SUMMARY/
+  else
+    cp ../SEARCH_MODELS/HOMOLOGS/* ../SUMMARY/
+  fi
 else
   echo "No valid R-free values found."
 fi

@@ -13,7 +13,7 @@ start_time=$(date +%s)
 DATE=${1}
 
 #Create folder for search models
-mkdir -p MRPARSE PREDICT_MODELS
+mkdir -p MRPARSE
 cd MRPARSE
 mkdir -p SEQ_FILES
 cd SEQ_FILES
@@ -35,90 +35,100 @@ echo "Sequence count: ${seq_count}"
 cd ..
 
 #Generate search models using MrParse and AlphaFold
-j=0
 
-for file in $(find SEQ_FILES -type f); do
+find SEQ_FILES -type f | while IFS= read -r file; do
   mrparse --seqin "$file" --max_hits 5 --ccp4cloud >> mrparse.log
 done
 
-for i in $(seq 0 $((${seq_count}-1))); do
-  cd mrparse_${i}
-  mkdir -p all_models
-  
-  if [ ! -d "models" ] || [ -z "$(ls -A models)" ] || [ ! -f af_models.json ]; then
-    touch af_models.txt
-    echo "No AF models were found."
-  else
-    cp models/*.pdb all_models
-    python3 ${SOURCE_DIR}/json_to_table.py af_models.json 
-  fi
+dir=$(pwd)
+
+process_models() {
+  local i=$1
+  cd ${dir}/mrparse_${i}
   
   if [ ! -d "homologs" ] || [ -z "$(ls -A homologs)" ]; then
-    touch homologs.txt
-    echo "No homologs were found."
+    echo "No homologs were found for sequence $((i+1))."
   else
-    cp homologs/*.pdb all_models
     if ! grep -qE '^\s*\[\s*\]\s*$' homologs.json; then
-      #The homologs.jason is not empty
+      # The homologs.json is not empty
       python3 ${SOURCE_DIR}/json_to_table.py homologs.json ${DATE}
     else
-      #The homologs.jason is empty
+      # The homologs.json is empty
       for file in "homologs"/*; do
         if [ -f "$file" ]; then
-          #There are homologs
+          # There are homologs
           if grep -q "ATOM" "$file"; then
-            #There are atoms in the homologs file
+            # There are atoms in the homologs file
             filename=$(basename -- "$file")
             filename="${filename%_*}"
 
-            ID=$(head -n 1 "$file" | awk '{print $NF}')
-            ID=$(echo "scale=2; $ID / 100" | bc)
+            seq_id=$(head -n 1 "$file" | awk '{print $NF}')
+            seq_id=$(echo "scale=2; $seq_id / 100" | bc)
 
-            echo -e "${filename}\t${ID}" >> homologs.txt
+            echo -e "${filename}\t${seq_id}" >> homologs.txt
           else
             rm "$file"
           fi
         fi
       done
     fi
+    sort -k2,2nr -k6,6nr homologs.txt -o homologs.txt
+    model_name=$(head -1 homologs.txt | awk '{print $1}')
+    file_name=$(echo homologs/${model_name}_* | cut -d ' ' -f 1)
+    if grep -q "ATOM" "$file_name" 2>/dev/null; then
+      cp ${file_name} ../../SEARCH_MODELS/HOMOLOGS/ENSEMBLE$((i+1)).pdb
+    fi
   fi
   
-  #Compare all models and determine the highest sequence identity of those models
-  cat af_models.txt homologs.txt > summary.txt
-  
-  if [ -s summary.txt ]; then
-    sort -k2,2nr -k7,7nr -k6,6nr summary.txt -o summary.txt
-    awk 'BEGIN { OFS="\t" } { printf "%-15s %-10s %-5s %-15s %-10s %-25s %-10s\n", $1, $2, $3, $4, $5, $6, $7 }' summary.txt > temp.txt && mv temp.txt summary.txt
-    model_name=$(head -1 summary.txt | awk '{print $1}')
-    file_name=$(echo all_models/${model_name}_* | cut -d ' ' -f 1)
-    if grep -q "ATOM" "$file_name"; then
-      best_identity=$(awk 'NR==1 {print $2}' summary.txt)
+  if [ -d "models" ] && [ -n "$(ls -A models)" ] && [ -f af_models.json ]; then
+    python3 ${SOURCE_DIR}/json_to_table.py af_models.json
+    sort -k2,2nr -k7,7nr af_models.txt -o af_models.txt
+    model_name=$(head -1 af_models.txt | awk '{print $1}')
+    file_name=$(echo models/${model_name}_* | cut -d ' ' -f 1)
+    if grep -q "ATOM" "$file_name" 2>/dev/null; then
+      seq_id=$(awk 'NR==1 {print $2}' af_models.txt)
     else
-      best_identity=0
+      seq_id=0
     fi
   else
-    best_identity=0
+    echo "No AlphaFold models were found for sequence $((i+1))."
+    seq_id=0
   fi
-  if (( $(echo "$best_identity >= 0.9" | bc -l) )) ; then
-    #The highest sequence identity is higher than 0.9, keep this model.
-    echo "Sequence identity of search model is $best_identity."
-    cp ${file_name} ../../SEARCH_MODELS/ENSEMBLE$((i+1)).pdb
+    
+  if (( $(echo "$seq_id >= 0.9" | bc -l) )) ; then
+    # The highest sequence identity is higher than 0.9, keep this model.
+    cp ${file_name} ../../SEARCH_MODELS/AF_MODELS/ENSEMBLE$((i+1)).pdb
+  else
+    echo "Phenix.PredictModel will be performed for sequence $((i+1))."
     cd ..
-  else
-    echo "Sequence identity of search model is lower than 0.9. Phenix.PredictModel will be performed."
-    cd ../../PREDICT_MODELS
-    seq_file=$(find ../MRPARSE/SEQ_FILES -type f | awk "NR==$(($i+1))")
-    #Predict a new model for this chain using AlphaFold
-    phenix.predict_and_build seq_file=$seq_file prediction_server=PhenixServer stop_after_predict=True include_templates_from_pdb=False > PredictAndBuild_${j}.log
-    if [ "$(find "PredictAndBuild_${j}_CarryOn" -mindepth 1 | head -n 1)" ]; then
-      #Prediction is successful. Process this predicted model.
-      phenix.process_predicted_model PredictAndBuild_${j}_CarryOn/PredictAndBuild_${j}_rebuilt.pdb b_value_field_is=*plddt > ProcessPredictedModel_${j}.log
-      cp PredictAndBuild_${j}_rebuilt_processed.pdb ../SEARCH_MODELS/ENSEMBLE$((i+1)).pdb
+    mkdir predict_${i}
+    cd predict_${i}
+    seq_file=$(find ../SEQ_FILES -type f | awk "NR==$(($i+1))")
+    # Predict a new model for this chain using AlphaFold
+    phenix.predict_and_build seq_file=$seq_file prediction_server=PhenixServer stop_after_predict=True include_templates_from_pdb=False > PredictAndBuild.log
+    if [ "$(find "PredictAndBuild_0_CarryOn" -mindepth 1 | head -n 1)" ]; then
+      # Prediction is successful. Process this predicted model.
+      phenix.process_predicted_model PredictAndBuild_0_CarryOn/PredictAndBuild_0_rebuilt.pdb b_value_field_is=*plddt > ProcessPredictedModel.log
+      cp PredictAndBuild_0_rebuilt_processed.pdb ../../SEARCH_MODELS/AF_MODELS/ENSEMBLE$((i+1)).pdb
     fi
-    ((j++))
-    cd ../MRPARSE
   fi
+}
+
+export -f process_models
+
+for i in $(seq 0 $((${seq_count}-1))); do
+  process_models $i &
 done
+wait
+cd ${dir}
+
+if [ -d "../SEARCH_MODELS/HOMOLOGS" ] && [ "$(ls -A ../SEARCH_MODELS/HOMOLOGS)" ]; then
+  for i in $(seq 0 $((${seq_count}-1))); do
+    if [ ! -f ../SEARCH_MODELS/HOMOLOGS/ENSEMBLE$((i+1)).pdb ] && [ -f ../SEARCH_MODELS/AF_MODELS/ENSEMBLE$((i+1)).pdb ]; then
+      cp ../SEARCH_MODELS/AF_MODELS/ENSEMBLE$((i+1)).pdb ../SEARCH_MODELS/HOMOLOGS/ENSEMBLE$((i+1)).pdb
+    fi
+  done
+fi
 
 #Calculate and echo timing information
 end_time=$(date +%s)

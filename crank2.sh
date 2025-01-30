@@ -25,7 +25,7 @@ comb_phdmmb
 fsigf plus i=I(+) sigi=SIGI(+) file=${MTZ}
 fsigf minus i=I(-) sigi=SIGI(-) wavel=${WAVELENGTH}
 sequence file=${SEQ}
-model substr  atomtype=${ATOM}
+model substr atomtype=${ATOM}
 
 target::SAD
 

@@ -62,7 +62,7 @@ xia2 pipeline=dials ${DATA_PATH} hdf5_plugin=${SOURCE_DIR}/durin-plugin.so ${arg
 CMD_PID=$!
 
 # Initialize a counter for the timeout (3600 seconds for 1 hour)
-TIMEOUT=3600
+TIMEOUT=360000
 COUNTER=0
 
 # Loop to check both the file and the timeout
@@ -76,8 +76,7 @@ while kill -0 $CMD_PID 2> /dev/null; do
 
   # Break the loop if the command runs more than the timeout
   if [[ $COUNTER -ge $TIMEOUT ]]; then
-    echo "Timeout: Round ${ROUND} DIALS_XIA2 command exceeded ${TIMEOUT} seconds."
-    echo "Round ${ROUND} DIALS_XIA2 processing failed!"
+    echo "Round ${ROUND} DIALS_XIA2 processing failed! Timeout!"
     kill $CMD_PID
     exit 1
   fi
@@ -142,7 +141,7 @@ if [ "${Rmerge_DIALS_XIA2}" = "" ];then
     echo "Round ${ROUND} DIALS_XIA2 processing failed!"
     rm DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log
     exit
-elif [ $(echo "${Rmerge_DIALS_XIA2} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_DIALS_XIA2} >= 2" | bc) -eq 1 ];then
+elif [ $(echo "${Rmerge_DIALS_XIA2} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_DIALS_XIA2} >= 100" | bc) -eq 1 ];then
     FLAG_DIALS_XIA2=0
     echo "Round ${ROUND} DIALS_XIA2 processing failed!"
     rm DIALS_XIA2_SUMMARY/DIALS_XIA2_SUMMARY.log

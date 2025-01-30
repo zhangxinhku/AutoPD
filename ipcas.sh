@@ -23,6 +23,7 @@
 #5: cycle number
 #6: output folder
 ##############################################
+
 SECONDS=0
 # input check
 if [ $# != 6 ]
@@ -48,7 +49,7 @@ then
 fi
 mkdir $out_dir
 
-${scr_dir}/ipcas_mtz.sh ${1} ${1}  F SIGF FreeR_flag #FP SIGFP FREE
+${scr_dir}/ipcas_mtz.sh ${1} ${1}  F SIGF FreeR_flag FP SIGFP FREE #FP SIGFP FREE
 
 # run cycle
 num=1
@@ -68,8 +69,11 @@ do
     cp $mtz_dir start/start.mtz
     cp $seq_dir start/seq
     $scr_dir/prepare.sh start/start.mtz
+    echo "1"
     $scr_dir/fraction.sh para/prepare.sh start/start.pdb
+    echo "2"
     $scr_dir/oasis.csh start/start.mtz
+    echo "3"
     $scr_dir/dm.csh $4
     if [ $(($num%2)) -eq 1 ]
     then
@@ -88,16 +92,11 @@ done
 
 # make summary
 $scr_dir/result.sh $out_dir/result $out_dir
-Rwork=$(awk '$4!=""' $out_dir/result | sort -k4,4n | head -1 | awk '{print $3}')
-Rfree=$(awk '$4!=""' $out_dir/result | sort -k4,4n | head -1 | awk '{print $4}')
 echo 'cycle Residues Rwork Rfree' | cat - $out_dir/result > $out_dir/temp && mv $out_dir/temp $out_dir/result
-
-#BUILT=$(grep 'CA ' $out_dir/Summary/Free_cycle_*.pdb | wc -l)
-#PLACED=$(grep 'CA ' $out_dir/Summary/Free_cycle_*.pdb | grep -v 'UNK'  | wc -l)
 echo "" >> $out_dir/result
-echo "Best solution: Rwork=${Rwork} Rfree=${Rfree}" >> $out_dir/result
-#echo "BUILT=${BUILT}" >> $out_dir/result
-#echo "PLACED=${PLACED}" >> $out_dir/result
+r_work=$(grep 'R VALUE            (WORKING SET) :' $out_dir/Summary/Free*.pdb 2>/dev/null | cut -d ':' -f 2 | xargs)
+r_free=$(grep 'FREE R VALUE                     :' $out_dir/Summary/Free*.pdb 2>/dev/null | cut -d ':' -f 2 | xargs)
+echo "IPCAS Results: R-work=${r_work} R-free=${r_free}" >> $out_dir/result
 
 duration=$SECONDS
 mins=$(($duration / 60))

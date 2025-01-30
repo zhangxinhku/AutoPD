@@ -59,7 +59,7 @@ echo ""
 for (( i=1; i<=num_mtz_files; i++ ))
 do
     if [ -f "SAD_$i/crank2.pdb" ]; then
-        R_factor=$(grep 'R factor after refinement is' SAD_$i/crank2.log | tail -1 | awk '{print $6}')
+        R_factor=$(grep 'R VALUE            (WORKING SET) :' SAD_$i/crank2.pdb | cut -d ':' -f 2 | xargs)
         echo "${i} ${R_factor}" >> result.log
     fi
 done
@@ -70,7 +70,8 @@ else
     sort -k2,2n result.log > result_sorted.log
     rm result.log
     best=$(awk 'NR==1 {print $1}' result_sorted.log)
-    echo "Best SAD result: SAD_${best} R_factor=${R_factor}" | tee -a SAD_SUMMARY/crank2.log
+    best_r=$(awk 'NR==1 {print $2}' result_sorted.log)
+    echo "Best SAD result: SAD_${best} R_factor=${best_r}" | tee -a SAD_SUMMARY/crank2.log
     name=$(find "SAD_${best}" -type f -name "*.mtz" ! -name "crank2.mtz" -exec basename {} \; | sed 's/\.mtz$//' | head -n 1)
     cp SAD_${best}/crank2.log SAD_SUMMARY
     cp SAD_${best}/*.mtz SAD_SUMMARY

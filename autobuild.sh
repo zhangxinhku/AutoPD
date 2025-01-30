@@ -16,7 +16,6 @@ echo ""
 #Input variables
 MTZ=$(readlink -f "${1}")
 PDB=$(readlink -f "${2}")
-SEQUENCE=$(readlink -f "${3}")
 
 #Create folder for Phenix Autobuild
 rm -rf AUTOBUILD
@@ -30,16 +29,20 @@ nproc=$(nproc)
 #phenix.autobuild
 phenix.autobuild data=${MTZ} model=${PDB} nproc=${nproc}  > AUTOBUILD.log
 
-awk '/SOLUTION/,/Citations for AutoBuild:/' AUTOBUILD.log | sed '$d'
-grep 'Best solution on cycle:' AUTOBUILD.log
-
-echo ""
-echo "Autobuild finished!"
+awk '/SOLUTION/,/Citations for AutoBuild:/' AUTOBUILD.log
 
 #Copy output files to SUMMARY folder
 cp AutoBuild_run_1_/overall_best.pdb AUTOBUILD_SUMMARY/AUTOBUILD.pdb
 cp AutoBuild_run_1_/overall_best_denmod_map_coeffs.mtz AUTOBUILD_SUMMARY/AUTOBUILD.mtz
 mv AUTOBUILD.log AUTOBUILD_SUMMARY/AUTOBUILD.log
+
+r_work=$(grep 'R VALUE            (WORKING SET) :' "AUTOBUILD_SUMMARY/AUTOBUILD.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
+r_free=$(grep 'FREE R VALUE                     :' "AUTOBUILD_SUMMARY/AUTOBUILD.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
+echo ""
+echo "Phenix.autobuild Results: R-work=$r_work  R-free=$r_free"
+
+echo ""
+echo "Autobuild finished!"
 
 #Calculate and echo timing information
 end_time=$(date +%s)
