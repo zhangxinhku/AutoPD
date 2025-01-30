@@ -51,6 +51,7 @@ solution_num=0
 
 for ((i=1; i<=num_mtz_files; i++)); do
   mtz_file=${mtz_files[$i-1]}
+  ${SOURCE_DIR}/ipcas_mtz.sh ${mtz_file} ${mtz_file}  F SIGF FreeR_flag > /dev/null 2>&1 #FP SIGFP FREE
   mkdir -p MR_$i
   cd MR_$i
   cp ${mtz_file} .
@@ -62,7 +63,7 @@ for ((i=1; i<=num_mtz_files; i++)); do
     MODE CCA
     ROOT PHASER_CCA
     HKLIN ${mtz_file}
-    LABIN F=F SIGF=SIGF
+    LABIN F=FP SIGF=SIGFP
     COMPOSITION BY ASU
     COMPOSITION PROTEIN SEQ ${SEQUENCE} NUM 1
 eof
@@ -89,7 +90,7 @@ eof
 MODE MR_AUTO
 ROOT PHASER
 HKLIN ${mtz_file}
-LABIN F=F SIGF=SIGF
+LABIN F=FP SIGF=SIGFP
 SGALTERNATIVE SELECT ALL" > phaser_input.txt
 
   for ((j=1; j<=${TEMPLATE_NUMBER}; j++)); do

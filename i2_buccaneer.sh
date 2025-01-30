@@ -24,7 +24,7 @@ do
 done < "${SEQ_FILE}"
 
 #Determine ASU contents
-$CCP4/lib/python3.7/site-packages/ccp4i2/bin/i2run ProvideAsuContents \
+$CCP4/lib/python3.9/site-packages/ccp4i2/bin/i2run ProvideAsuContents \
 	--ASU_CONTENT \
                    sequence=${sequence} \
 	           nCopies=1 \
@@ -34,13 +34,13 @@ $CCP4/lib/python3.7/site-packages/ccp4i2/bin/i2run ProvideAsuContents \
 ASU=$(readlink -f ASUCONTENTFILE.asu.xml)
 
 #CCP4i2 Buccaneer
-$CCP4/lib/python3.7/site-packages/ccp4i2/bin/i2run buccaneer_build_refine_mr \
+$CCP4/lib/python3.9/site-packages/ccp4i2/bin/i2run buccaneer_build_refine_mr \
 	--F_SIGF \
 		fullPath=${MTZ} \
-		columnLabels="/*/*/[F,SIGF]" \
+		columnLabels="/*/*/[FP,SIGFP]" \
 	--FREERFLAG \
 		fullPath=${MTZ} \
-		columnLabels="/*/*/[FreeR_flag]" \
+		columnLabels="/*/*/[FREE]" \
 	--ASUIN ${ASU} \
 	--BUCCANEER_MR_MODE_XYZIN ${PDB} \
 	--noDb &> BUCCANEER.log
