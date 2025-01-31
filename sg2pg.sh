@@ -26,6 +26,7 @@ case "$space_group" in
     "I422" | "I4122") echo "I422" ;;
     "P3" | "P31" | "P32") echo "P3" ;;
     "R3") echo "R3" ;;
+    "H3") echo "H3" ;;
     "P312" | "P321" | "P3112" | "P3121" | "P3212" | "P3221") echo "P32" ;;
     "R32") echo "R32" ;;
     "H32") echo "H32" ;;

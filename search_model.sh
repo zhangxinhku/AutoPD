@@ -109,7 +109,7 @@ process_models() {
     if [ "$(find "PredictAndBuild_0_CarryOn" -mindepth 1 | head -n 1)" ]; then
       # Prediction is successful. Process this predicted model.
       phenix.process_predicted_model PredictAndBuild_0_CarryOn/PredictAndBuild_0_rebuilt.pdb b_value_field_is=*plddt > ProcessPredictedModel.log
-      cp PredictAndBuild_0_rebuilt_processed.pdb ../../SEARCH_MODELS/AF_MODELS/ENSEMBLE$((i+1)).pdb
+      cp PredictAndBuild_0_rebuilt_processed_*.pdb ../../SEARCH_MODELS/AF_MODELS/
     fi
   fi
 }

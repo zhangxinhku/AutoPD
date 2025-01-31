@@ -193,8 +193,8 @@ ${SOURCE_DIR}/mr.sh ${MTZ_IN} ${Z}
 if [ -s "PHASER_MR/MR_SUMMARY/MR_BEST.txt" ]; then
   echo ""
   echo "Refinement Results:"
-  awk '{print $1, "R-work="$5, "R-free="$6}' PHASER_MR/MR_SUMMARY/MR_BEST.txt
-  r_free_refine=$(sort -k6,6n "PHASER_MR/MR_SUMMARY/MR_BEST.txt" | awk 'NR==1 {print $6}')
+  awk '{print $1, "R-work="$6, "R-free="$7}' PHASER_MR/MR_SUMMARY/MR_BEST.txt
+  r_free_refine=$(sort -k6,6n "PHASER_MR/MR_SUMMARY/MR_BEST.txt" | awk 'NR==1 {print $7}')
 #  r_work=$(sort -k6,6n "PHASER_MR/MR_SUMMARY/MR_BEST.txt" | awk 'NR==1 {print $5}')
 else
   exit 1

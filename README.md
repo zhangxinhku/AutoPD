@@ -17,11 +17,6 @@ Downloads website: [https://www.globalphasing.com/autoproc/](https://www.globalp
 ```
 sudo apt install parallel
 ```
-### pandas
-```
-sudo apt install python3-pip
-pip install pandas
-```
 ### gnuplot
 ```
 sudo apt install gnuplot
@@ -57,7 +52,7 @@ To install AutoPD, download and unpack the repository. Remember to add the follo
 export PATH=<path>/AutoPD/:$PATH
 ```
 
-Please note an issue with the ProvideAsuContents.py file in the CCP4 installation folder. For Buccaneer to run successfully, replace the existing ProvideAsuContents.py (located at `$CCP4/lib/python3.9/site-packages/ccp4i2/wrappers/ProvideAsuContents/script/ProvideAsuContents.py`) and CCP4I2Runner.py (located at `$CCP4/lib/python3.9/site-packages/ccp4i2/core/CCP4I2Runner.py`) with the version provided in the main branch (contributed by Stuart McNicholas). These two files are only applicable to CCP4 versions newer than CCP4-9.0.
+Please note an issue with the ProvideAsuContents.py file in the CCP4 installation folder. For Buccaneer to run successfully, replace the existing ProvideAsuContents.py (located at `$CCP4/lib/python3.9/site-packages/ccp4i2/wrappers/ProvideAsuContents/script/ProvideAsuContents.py`) and CCP4I2Runner.py (located at `$CCP4/lib/python3.9/site-packages/ccp4i2/core/CCP4I2Runner.py`) with the version provided in the main branch (contributed by Stuart McNicholas).
 
 ## Usage
 AutoPD is straightforward to use. Provide the path to your diffraction data and sequence file, then execute the command as follows:
@@ -65,7 +60,7 @@ AutoPD is straightforward to use. Provide the path to your diffraction data and 
 autopipeline.sh data_path=<path_to_diffraction_data> seq_file=<path_to_sequence>/sequence.fasta out_dir=<output_folder_name> | tee output.log
 ```
 AutoPD supports optional parameters for enhanced flexibility:  
-- **mtz_file=<path_to_mtz_file>/data.mtz**:   Skips data reduction if provided. The pipeline assumes the labels in mtz files are FreeR_flag F SIGF or FreeR_flag FP SIGFP.
+- **mtz_file=<path_to_mtz_file>/data.mtz**:   Skips data reduction if provided.  
 - **pdb_path=<path_to_pdb_files>**:           Uses provided PDB files for MR, skipping search model generation.  
 - **rotation_axis=0,0,1**:                    Custom rotation axis for data reduction.
 - **beam_x=1200 beam_y=1300**:                Custom beam center in pixels.
