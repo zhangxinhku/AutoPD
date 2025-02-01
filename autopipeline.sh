@@ -24,6 +24,7 @@ ATOM=""
 SPACE_GROUP=""
 BEAM_X=""
 BEAM_Y=""
+IPCAS_CYCLE="20"
 
 for arg in "$@"; do
   if [[ "$arg" == *=* ]]; then
@@ -43,6 +44,7 @@ for arg in "$@"; do
       space_group) SPACE_GROUP="$value";;        #Space group
       beam_x) BEAM_X="$value" ;;                 #Beam center x
       beam_y) BEAM_Y="$value" ;;                 #Beam center y
+      ipcas_cycle) IPCAS_CYCLE="$value" ;;       #IPCAS cycle
       *) echo "Invalid parameter: $arg" >&2; exit 1;;
     esac
   else
@@ -249,7 +251,7 @@ if [ ! -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ] || ([ "$(echo "${r_free}
     if [ ! -f "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" ] || [ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ]; then
         echo ""
         echo "IPCAS 2.0 will be performed."
-        "${SOURCE_DIR}/ipcas.sh" "${MTZ}" "${PDB}" "${SEQUENCE}" 0.5 15 . > IPCAS.log
+        "${SOURCE_DIR}/ipcas.sh" "${MTZ}" "${PDB}" "${SEQUENCE}" 0.5 ${IPCAS_CYCLE} . > IPCAS.log
         echo ""
         cat IPCAS/result
         mv IPCAS.log IPCAS/Summary/
