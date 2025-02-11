@@ -21,6 +21,11 @@ sudo apt install parallel
 ```
 sudo apt install gnuplot
 ```
+### pandas
+```
+sudo apt install python3-pip
+pip install pandas
+```
 ### IPCAS (optional)
 The installation package for IPCAS can be found on the main page. Follow these commands to install:
 ```
