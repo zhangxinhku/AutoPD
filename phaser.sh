@@ -38,7 +38,7 @@ eof
     echo "MR_${FLAG}_$i Phaser CCA EXIT STATUS: ${CCA_EXIT_STATUS}"
     
     if [ ${CCA_EXIT_STATUS} == "FAILURE" ]; then
-      exit 1
+      Z_NUMBER=1
     else
       echo ""
       echo "MR_${FLAG}_$i Most probable Z=${Z_NUMBER}"

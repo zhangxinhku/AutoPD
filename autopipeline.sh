@@ -25,6 +25,8 @@ SPACE_GROUP=""
 BEAM_X=""
 BEAM_Y=""
 IPCAS_CYCLE="20"
+AF_PREDICT="false"
+PAE_SPLIT="false"
 
 for arg in "$@"; do
   if [[ "$arg" == *=* ]]; then
@@ -45,6 +47,8 @@ for arg in "$@"; do
       beam_x) BEAM_X="$value" ;;                 #Beam center x
       beam_y) BEAM_Y="$value" ;;                 #Beam center y
       ipcas_cycle) IPCAS_CYCLE="$value" ;;       #IPCAS cycle
+      af_predict) AF_PREDICT="$value" ;;         #AlphaFold Prediction by Phenix
+      pae_split) PAE_SPLIT="$value" ;;         #PAE Splitting by CCP4
       *) echo "Invalid parameter: $arg" >&2; exit 1;;
     esac
   else
@@ -57,7 +61,7 @@ SEQUENCE=$(readlink -f "${SEQUENCE}")
 EXPERIMENT=$(readlink -f "${EXPERIMENT}")
 MR_TEMPLATE_PATH=$(readlink -f "${MR_TEMPLATE_PATH}")
 
-export SOURCE_DIR DATA_PATH SEQUENCE ROTATION_AXIS BEAM_X BEAM_Y ATOM
+export SOURCE_DIR DATA_PATH SEQUENCE ROTATION_AXIS BEAM_X BEAM_Y ATOM AF_PREDICT PAE_SPLIT
 
 #Create and enter folder for data processing
 if [ -d "$OUT_DIR" ]; then
@@ -122,12 +126,12 @@ if [ -z "${MR_TEMPLATE_PATH}" ]; then
 elif [ ! -e "${MR_TEMPLATE_PATH}" ]; then
     echo "MR template path does not exist."
 else
-    cp ${MR_TEMPLATE_PATH}/*.pdb INPUT_FILES SEARCH_MODELS/INPUT_MODELS
+    cp ${MR_TEMPLATE_PATH}/*.pdb INPUT_FILES
+    cp ${MR_TEMPLATE_PATH}/*.pdb SEARCH_MODELS/INPUT_MODELS
     echo "Molecular replacement templates were input. MrParse will be skipped."
     echo "MR template path: ${MR_TEMPLATE_PATH}"
     MP="false"
 fi
-
 #Data reduction and MrParse
 echo "============================================================================================="
 echo "                                   Data reduction & MrParse                                  "
@@ -196,7 +200,7 @@ if [ -s "PHASER_MR/MR_SUMMARY/MR_BEST.txt" ]; then
   echo ""
   echo "Refinement Results:"
   awk '{print $1, "R-work="$6, "R-free="$7}' PHASER_MR/MR_SUMMARY/MR_BEST.txt
-  r_free_refine=$(sort -k6,6n "PHASER_MR/MR_SUMMARY/MR_BEST.txt" | awk 'NR==1 {print $7}')
+# r_free_refine=$(sort -k6,6n "PHASER_MR/MR_SUMMARY/MR_BEST.txt" | awk 'NR==1 {print $7}')
 #  r_work=$(sort -k6,6n "PHASER_MR/MR_SUMMARY/MR_BEST.txt" | awk 'NR==1 {print $5}')
 else
   exit 1
@@ -210,25 +214,22 @@ echo "                                         Model building                   
 echo "============================================================================================="
 echo ""
 echo "Buccaneer will be performed."
+
 ${SOURCE_DIR}/buccaneer.sh
-    
-if [ -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ]; then
-    r_free=$(grep 'FREE R VALUE                     :' "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
-    PDB=$(readlink -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb")
+r_free=$(grep 'FREE R VALUE                     :' "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
+
+PDB=$(readlink -f "SUMMARY/PHASER.1.pdb")
+if [ -f "SUMMARY/PHASER.1.mtz" ]; then
+  MTZ="SUMMARY/PHASER.1.mtz"
 else
-    PDB=$(readlink -f "SUMMARY/PHASER.1.pdb")
+  MTZ=$(find SUMMARY -type f -name "*.mtz" ! -name "BUCCANEER.mtz" ! -name "REFINEMENT.mtz" -print -quit)
 fi
 
+
 #Phenix Autobuild
-if [ ! -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ] || ([ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ] && [ "$(echo "${r_free_refine} > 0.35" | bc)" -eq 1 ]); then
+if [ ! -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ] || [ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ]; then
     echo ""
     echo "Phenix Autobuild will be performed."
-    
-    if [ -f "SUMMARY/PHASER.1.mtz" ]; then
-      MTZ="SUMMARY/PHASER.1.mtz"
-    else
-      MTZ=$(find SUMMARY -type f -name "*.mtz" ! -name "BUCCANEER.mtz" ! -name "REFINEMENT.mtz" -print -quit)
-    fi
     
     ${SOURCE_DIR}/autobuild.sh ${MTZ} ${PDB}
     
@@ -236,18 +237,10 @@ if [ ! -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ] || ([ "$(echo "${r_free}
         cp AUTOBUILD/AUTOBUILD_SUMMARY/* SUMMARY/
         r_free=$(grep 'FREE R VALUE                     :' "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
     else
-        PDB=$(readlink -f "SUMMARY/PHASER.1.pdb")
-        ${SOURCE_DIR}/autobuild.sh ${MTZ} ${PDB}
-        if [ -f "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" ]; then
-          cp AUTOBUILD/AUTOBUILD_SUMMARY/* SUMMARY/
-          r_free=$(grep 'FREE R VALUE                     :' "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
-        else
-          echo "AUTOBUILD.pdb does not exist."
-        fi
+        echo "AUTOBUILD.pdb does not exist."
     fi
     
-    #IPCAS
-    PDB=$(readlink -f "SUMMARY/PHASER.1.pdb")       
+    #IPCAS       
     if [ ! -f "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" ] || [ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ]; then
         echo ""
         echo "IPCAS 2.0 will be performed."

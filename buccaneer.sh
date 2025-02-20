@@ -35,7 +35,7 @@ for folder in ../PHASER_MR/MR_SUMMARY/*; do
     if [ -f "${folder_path}/PHASER.1.mtz" ]; then
         MTZ=$(readlink -f "${folder_path}/PHASER.1.mtz")
     else
-        MTZ=$(find ${folder_path} -name "*.mtz" -print -quit)
+        MTZ=$(find ${folder_path} -maxdepth 1 -name "*.mtz" -print -quit)
     fi
     
     ${SOURCE_DIR}/i2_buccaneer.sh ${MTZ} ${PDB} &
@@ -83,8 +83,10 @@ if [ -n "$best" ]; then
     
   if [[ "$best" == MR_A* ]]; then
     cp ../SEARCH_MODELS/AF_MODELS/* ../SUMMARY/
-  else
+  elif [[ "$best" == MR_H* ]]; then
     cp ../SEARCH_MODELS/HOMOLOGS/* ../SUMMARY/
+  else
+    cp ../SEARCH_MODELS/INPUT_MODELS/* ../SUMMARY/
   fi
 else
   echo "No valid R-free values found."

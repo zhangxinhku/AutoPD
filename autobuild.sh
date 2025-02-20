@@ -27,7 +27,7 @@ mkdir -p AUTOBUILD_SUMMARY
 nproc=$(nproc)
 
 #phenix.autobuild
-phenix.autobuild data=${MTZ} model=${PDB} nproc=${nproc}  > AUTOBUILD.log
+phenix.autobuild data=${MTZ} model=${PDB} nproc=4  > AUTOBUILD.log
 
 awk '/SOLUTION/,/Citations for AutoBuild:/' AUTOBUILD.log
 
