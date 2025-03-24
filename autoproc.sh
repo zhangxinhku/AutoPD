@@ -17,7 +17,12 @@ for arg in "$@"; do
         cell_constants) UNIT_CELL="$value" ;;
     esac
 done
-
+if [[ -n "$SPACE_GROUP_INPUT" ]]; then
+    SPACE_GROUP=$SPACE_GROUP_INPUT
+fi
+if [[ -n "$CELL_CONSTANTS_INPUT" ]]; then
+    UNIT_CELL="\"$(echo "$CELL_CONSTANTS_INPUT" | tr ',，' ' ')\""
+fi
 #Determine whether running this script according to Flag_autoPROC
 case "${FLAG_autoPROC}" in
     "")
@@ -43,17 +48,46 @@ fi
 #Optional parameters
 args=()
 
-for param in "autoPROC_XdsKeyword_ROTATION_AXIS=${ROTATION_AXIS}" "beam=${BEAM}"; do
+for param in "autoPROC_XdsKeyword_ROTATION_AXIS=${ROTATION_AXIS}" "beam=${BEAM}" "autoPROC_XdsKeyword_DETECTOR_DISTANCE=${DISTANCE}"; do
     IFS="=" read -r key value <<< "$param"
     [ -n "$value" ] && args+=("$key=$value")
 done
 
 #autoPROC processing
 if [ "${FILE_TYPE}" = "h5" ]; then
-    file_name=$(find "${DATA_PATH}" -maxdepth 1 -type f ! -name '.*' -name "*master.h5" -printf "%f")
-    process -ANO -h5 ${DATA_PATH}/${file_name} -d autoPROC_${ROUND} symm=${SPACE_GROUP} cell="${UNIT_CELL}" ${args[@]} > autoPROC_${ROUND}.log
+    IMAGE_FULL_NAME=$(find "${DATA_PATH}" -maxdepth 1 -type f -name "*master.h5" -print -quit | xargs realpath)
+    if [ -n "${IMAGE_START}" ] && [ -n "${IMAGE_END}" ]; then
+      file_path=$(dirname "$IMAGE_FULL_NAME")
+      file_name=$(basename "$IMAGE_FULL_NAME")
+      base_name="${file_name%.*}"       
+      prefix="${base_name%_*}"          
+      prefix="${prefix:-data}"
+      process -ANO -Id ${prefix},${file_path},${file_name},${IMAGE_START},${IMAGE_END} -d autoPROC_${ROUND} symm=${SPACE_GROUP} cell="${UNIT_CELL}" ${args[@]} > autoPROC_${ROUND}.log
+    else
+      process -ANO -h5 ${IMAGE_FULL_NAME} -d autoPROC_${ROUND} symm=${SPACE_GROUP} cell="${UNIT_CELL}" ${args[@]} > autoPROC_${ROUND}.log
+    fi
 else
-    process -ANO -I ${DATA_PATH} -d autoPROC_${ROUND} symm=${SPACE_GROUP} cell="${UNIT_CELL}" "${args[@]}" > autoPROC_${ROUND}.log
+    if [ -n "${IMAGE_START}" ] && [ -n "${IMAGE_END}" ]; then
+      IMAGE_FULL_NAME=$(ls -1 "${DATA_PATH}" | head -1 | xargs -I{} realpath "${DATA_PATH}/{}")
+      file_path=$(dirname "$IMAGE_FULL_NAME")
+      file_name=$(basename "$IMAGE_FULL_NAME")
+      base_name="${file_name%.*}"       
+      prefix="${base_name%_*}"          
+      prefix="${prefix:-data}"
+      extension="${file_name##*.}"
+      if [[ "$base_name" =~ (.*[^0-9])([0-9]+)$ ]]; then
+        prefix="${BASH_REMATCH[1]}"         
+        digits="${BASH_REMATCH[2]}"        
+        replaced=$(printf "%${#digits}s" | tr ' ' '#')  
+        new_base_name="${prefix}${replaced}"
+      else
+        new_base_name="$base_name"         
+      fi
+      masked_name="${new_base_name}.${extension}"
+      process -ANO -Id ${prefix},${file_path},${masked_name},${IMAGE_START},${IMAGE_END} -d autoPROC_${ROUND} symm=${SPACE_GROUP} cell="${UNIT_CELL}" "${args[@]}" > autoPROC_${ROUND}.log
+    else
+      process -ANO -I ${DATA_PATH} -d autoPROC_${ROUND} symm=${SPACE_GROUP} cell="${UNIT_CELL}" "${args[@]}" > autoPROC_${ROUND}.log
+    fi
 fi
 
 if [ ! -f "autoPROC_${ROUND}/staraniso_alldata-unique.mtz" ]; then
@@ -66,6 +100,12 @@ fi
 {
 ctruncate -mtzin autoPROC_${ROUND}/aimless.mtz -mtzout autoPROC_${ROUND}/aimless_truncated.mtz -colin '/*/*/[IMEAN,SIGIMEAN]' -colano '/*/*/[I(+),SIGI(+),I(-),SIGI(-)]' > autoPROC_${ROUND}/ctruncate.log
 } 2>/dev/null
+
+#aimless bin 20
+cd autoPROC_${ROUND}
+sed -i 's/^BINS[[:space:]]\+10/BINS 20/' aimless.sh
+./aimless.sh > aimless.log
+cd ..
 
 mv autoPROC_${ROUND}.log autoPROC_${ROUND}
 
@@ -80,32 +120,27 @@ beam_center_refined=$(grep "DETECTOR COORDINATES (PIXELS) OF DIRECT BEAM" autoPR
 echo "Beam_center_refined         [pixel] = ${beam_center_refined}" >> autoPROC_SUMMARY/autoPROC_SUMMARY.log
 ${SOURCE_DIR}/dr_log.sh autoPROC_${ROUND}/aimless.log autoPROC_${ROUND}/ctruncate.log autoPROC_${ROUND}/pointless.log >> autoPROC_SUMMARY/autoPROC_SUMMARY.log
 
-#Extract Rmerge Resolution Space group Point group
-Rmerge_autoPROC=$(grep 'Rmerge  (all I+ and I-)' autoPROC_SUMMARY/autoPROC_SUMMARY.log | awk '{print $6}')
-Resolution_autoPROC=$(grep 'High resolution limit' autoPROC_SUMMARY/autoPROC_SUMMARY.log | awk '{print $4}')
-SG_autoPROC=$(grep 'Space group:' autoPROC_SUMMARY/autoPROC_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')
-PointGroup_autoPROC=$(${SOURCE_DIR}/sg2pg.sh ${SG_autoPROC})
-Completeness_autoPROC=$(grep 'Completeness' autoPROC_SUMMARY/autoPROC_SUMMARY.log | awk '{print $2}')
+#Extract Rmeas
+Rmeas_autoPROC=$(grep 'Rmeas (all I+ & I-)' autoPROC_SUMMARY/autoPROC_SUMMARY.log | awk '{print $6}')
+Rmeas_autoPROC=${Rmeas_autoPROC:-0}
 
-#Determine running successful or failed using Rmerge 
-if [ "${Rmerge_autoPROC}" = "" ];then
+#Determine running successful or failed using Rmeas
+if [ $(echo "${Rmeas_autoPROC} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmeas_autoPROC} >= 100" | bc) -eq 1 ];then
     FLAG_autoPROC=0
     echo "Round ${ROUND} autoPROC processing failed!"
-    rm autoPROC_SUMMARY/autoPROC_SUMMARY.log
-    exit
-elif [ $(echo "${Rmerge_autoPROC} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_autoPROC} >= 100" | bc) -eq 1 ];then
-    FLAG_autoPROC=0
-    echo "Round ${ROUND} autoPROC processing failed!"
-    rm autoPROC_SUMMARY/autoPROC_SUMMARY.log
+#    rm autoPROC_SUMMARY/autoPROC_SUMMARY.log
     exit
 else
-    FLAG_autoPROC=1
+    echo "FLAG_autoPROC=1" >> ../temp.txt
     echo "Round ${ROUND} autoPROC processing succeeded!"
-    echo "autoPROC ${Rmerge_autoPROC} ${Resolution_autoPROC} ${PointGroup_autoPROC} ${Completeness_autoPROC}" >> ../temp1.txt
+    echo "autoPROC ${Rmeas_autoPROC}" >> ../temp1.txt
 fi
 
-#For invoking in autopipeline.sh
-echo "FLAG_autoPROC=${FLAG_autoPROC}" >> ../temp.txt
+#Check Anomalous Signal strong anomalous signal
+if grep -q "strong anomalous signal" "autoPROC_SUMMARY/autoPROC_SUMMARY.log" && grep -q "Estimate of the resolution limit" "autoPROC_SUMMARY/autoPROC_SUMMARY.log"; then
+    echo "Strong anomalous signal found in autoPROC.mtz"
+    cp autoPROC_SUMMARY/autoPROC.mtz ../SAD_INPUT
+fi
 
 #Extract statistics data
 mkdir -p STATISTICS_FIGURES

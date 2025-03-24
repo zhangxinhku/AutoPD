@@ -17,7 +17,12 @@ for arg in "$@"; do
         cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
     esac
 done
-
+if [[ -n "$SPACE_GROUP_INPUT" ]]; then
+    SPACE_GROUP=$SPACE_GROUP_INPUT
+fi
+if [[ -n "$CELL_CONSTANTS_INPUT" ]]; then
+    UNIT_CELL_CONSTANTS=$CELL_CONSTANTS_INPUT
+fi
 #Determine whether running this script according to Flag_XDS_XIA2
 case "${FLAG_XDS_XIA2}" in
     "")
@@ -50,7 +55,7 @@ cd XDS_XIA2_${ROUND}
 #Optional parameters
 args=()
 
-for param in "goniometer.axes=${ROTATION_AXIS}" "xia2.settings.space_group=${SPACE_GROUP}" "xia2.settings.unit_cell=${UNIT_CELL_CONSTANTS}" "mosflm_beam_centre=${BEAM}"; do
+for param in "goniometer.axes=${ROTATION_AXIS}" "xia2.settings.space_group=${SPACE_GROUP}" "xia2.settings.unit_cell=${UNIT_CELL_CONSTANTS}" "mosflm_beam_centre=${BEAM}" "geometry.detector.distance=${DISTANCE}"; do
     IFS="=" read -r key value <<< "$param"
     [ -n "$value" ] && args+=("$key=$value")
 done
@@ -65,9 +70,18 @@ run_xia2_with_timeout() {
     local pipeline=$1
     local timeout=$2
     local start_time=$(date +%s)
-
-    xia2 pipeline=${pipeline} ${DATA_PATH} hdf5_plugin=${SOURCE_DIR}/durin-plugin.so "${args[@]}" > /dev/null &
-    local cmd_pid=$!
+    if [ -n "${IMAGE_START}" ] && [ -n "${IMAGE_END}" ]; then
+      if [ "${FILE_TYPE}" = "h5" ]; then
+        IMAGE_NAME=$(find "${DATA_PATH}" -maxdepth 1 -type f -name "*master.h5" -print -quit | xargs realpath)
+      else
+        IMAGE_NAME=$(ls -1 "${DATA_PATH}" | head -1 | xargs -I{} realpath "${DATA_PATH}/{}")
+      fi     
+      xia2 pipeline=${pipeline} image=${IMAGE_NAME}:${IMAGE_START}:${IMAGE_END} hdf5_plugin=${SOURCE_DIR}/durin-plugin.so atom=X "${args[@]}" > /dev/null &
+      local cmd_pid=$!
+    else
+      xia2 pipeline=${pipeline} ${DATA_PATH} hdf5_plugin=${SOURCE_DIR}/durin-plugin.so atom=X "${args[@]}" > /dev/null &
+      local cmd_pid=$!
+    fi
 
     while kill -0 $cmd_pid 2> /dev/null; do
       if [[ -e "xia2-error.txt" ]]; then
@@ -92,7 +106,7 @@ run_xia2_with_timeout() {
     return 0 #Successful
 }
 
-# Try running xia2 pipeline=3d with timeout
+# Try running xia2 pipeline=3dii with timeout
 if ! run_xia2_with_timeout "3d" 3600 || [ ! -f "DataFiles/AUTOMATIC_DEFAULT_free.mtz" ]; then
     # If 3d fails or times out, attempt to run 3dii
     cd ..
@@ -128,32 +142,27 @@ beam_center_refined=$(grep "DETECTOR COORDINATES (PIXELS) OF DIRECT BEAM" XDS_XI
 echo "Beam_center_refined         [pixel] = ${beam_center_refined}" >> XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log
 ${SOURCE_DIR}/dr_log.sh XDS_XIA2_${ROUND}/xia2_${mode}/LogFiles/AUTOMATIC_DEFAULT_aimless.log XDS_XIA2_${ROUND}/xia2_${mode}/LogFiles/AUTOMATIC_DEFAULT_ctruncate.log >> XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log
 
-#Extract Rmerge Resolution Space group Point group
-Rmerge_XDS_XIA2=$(grep 'Rmerge  (all I+ and I-)' XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | awk '{print $6}')
-Resolution_XDS_XIA2=$(grep 'High resolution limit' XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | awk '{print $4}')
-SG_XDS_XIA2=$(grep 'Space group:' XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')
-PointGroup_XDS_XIA2=$(${SOURCE_DIR}/sg2pg.sh ${SG_XDS_XIA2})
-Completeness_XDS_XIA2=$(grep 'Completeness' XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | awk '{print $2}')
+#Extract Rmeas
+Rmeas_XDS_XIA2=$(grep 'Rmeas (all I+ & I-)' XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log | awk '{print $6}')
+Rmeas_XDS_XIA2=${Rmeas_XDS_XIA2:-0}
 
-#Determine running successful or failed using Rmerge 
-if [ "${Rmerge_XDS_XIA2}" = "" ];then
+#Determine running successful or failed using Rmeas
+if [ $(echo "${Rmeas_XDS_XIA2} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmeas_XDS_XIA2} >= 100" | bc) -eq 1 ];then
     FLAG_XDS_XIA2=0
     echo "Round ${ROUND} XDS_XIA2 processing failed!"
     rm XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log
-    exit
-elif [ $(echo "${Rmerge_XDS_XIA2} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_XDS_XIA2} >= 100" | bc) -eq 1 ];then
-    FLAG_XDS_XIA2=0
-    echo "Round ${ROUND} XDS_XIA2 processing failed!"
-    rm XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log
-    exit
+    exit 1
 else
-    FLAG_XDS_XIA2=1
+    echo "FLAG_XDS_XIA2=1" >> ../temp.txt
     echo "Round ${ROUND} XDS_XIA2 processing succeeded!"
-    echo "XDS_XIA2 ${Rmerge_XDS_XIA2} ${Resolution_XDS_XIA2} ${PointGroup_XDS_XIA2} ${Completeness_XDS_XIA2}" >> ../temp1.txt
+    echo "XDS_XIA2 ${Rmeas_XDS_XIA2}" >> ../temp1.txt
 fi
 
-#For invoking in autopipeline_parrallel.sh
-echo "FLAG_XDS_XIA2=${FLAG_XDS_XIA2}" >> ../temp.txt
+#Check Anomalous Signal strong anomalous signal
+if grep -q "strong anomalous signal" "XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log" && grep -q "Estimate of the resolution limit" "XDS_XIA2_SUMMARY/XDS_XIA2_SUMMARY.log"; then
+    echo "Strong anomalous signal found in XDS_XIA2.mtz"
+    cp XDS_XIA2_SUMMARY/XDS_XIA2.mtz ../SAD_INPUT
+fi
 
 #Extract statistics data
 mkdir -p STATISTICS_FIGURES

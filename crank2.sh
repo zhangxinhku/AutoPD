@@ -13,7 +13,7 @@ SEQ=${2}
 ATOM=${3}
 WAVELENGTH=${4}
 
-python $CCP4/share/ccp4i/crank2/crank2.py dirout crank2 hklout crank2.mtz xyzout crank2.pdb << END
+python3 $CCP4/share/ccp4i/crank2/crank2.py dirout crank2 hklout crank2.mtz xyzout crank2.pdb << END
 
 faest      afro
 substrdet  prasa

@@ -17,10 +17,16 @@ for arg in "$@"; do
         round) ROUND="$value" ;;
         flag) FLAG_XDS="$value" ;;
         sp) SPACE_GROUP="$value" ;;
-        #sp_number) SPACE_GROUP_NUMBER="$value" ;;
+#        sp_number) SPACE_GROUP_NUMBER="$value" ;;
         cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
     esac
 done
+if [[ -n "$SPACE_GROUP_INPUT" ]]; then
+    SPACE_GROUP=$SPACE_GROUP_INPUT
+fi
+if [[ -n "$CELL_CONSTANTS_INPUT" ]]; then
+    UNIT_CELL_CONSTANTS=$CELL_CONSTANTS_INPUT
+fi
 
 #Determine whether running this script according to Flag_XDS
 case "${FLAG_XDS}" in
@@ -98,6 +104,17 @@ fi
 #Beam center
 if [ -n "${BEAM_X}" ]; then
     sed -i "s/ORGX=.*$/ORGX= ${BEAM_X} ORGY= ${BEAM_Y}/g" XDS.INP
+fi
+
+#Crystal to detector distance
+if [ -n "${DISTANCE}" ]; then
+    sed -i "s/DETECTOR_DISTANCE=.*$/DETECTOR_DISTANCE= ${DISTANCE}/g" XDS.INP
+fi
+
+#Image range
+if [ -n "${IMAGE_START}" ] && [ -n "${IMAGE_END}" ]; then
+    sed -i "s/DATA_RANGE=.*$/DATA_RANGE=${IMAGE_START} ${IMAGE_END}/g" XDS.INP
+    sed -i "s/SPOT_RANGE=.*$/SPOT_RANGE=${IMAGE_START} ${IMAGE_END}/g" XDS.INP
 fi
 
 #Rotation axis selection
@@ -385,14 +402,16 @@ cp aimless.xml 16_aimless.xml
 cat aimless.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
-Rmerge_XDS=$(grep 'Rmerge  (all I+ and I-)' 16_aimless.log | awk '{print $6}')
-Rmerge_XDS=${Rmerge_XDS:-0}
+Rmeas_XDS=$(grep 'Rmeas (all I+ & I-)' 16_aimless.log | awk '{print $6}')
+Rmeas_XDS=${Rmeas_XDS:-0}
 
-if [ "$(echo "${Rmerge_XDS} <= 0" | bc)" -eq 1 ]; then
+if [ $(echo "${Rmeas_XDS} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmeas_XDS} >= 100" | bc) -eq 1 ];then
     FLAG_XDS=0
     echo "FLAG_XDS=${FLAG_XDS}" >> ../../temp.txt
     echo "Round ${ROUND} XDS processing failed!"
     exit 1
+else
+    echo "XDS ${Rmeas_XDS}" >> ../../temp1.txt
 fi
 
 #17_ctruncate
@@ -440,34 +459,15 @@ beam_center_refined=$(grep "DETECTOR COORDINATES (PIXELS) OF DIRECT BEAM" XDS_${
 echo "Beam_center_refined         [pixel] = ${beam_center_refined}" >> XDS_SUMMARY/XDS_SUMMARY.log
 ${SOURCE_DIR}/dr_log.sh XDS_${ROUND}/aimless.log XDS_${ROUND}/ctruncate.log XDS_${ROUND}/pointless.log >> XDS_SUMMARY/XDS_SUMMARY.log
 
-#Extract Rmerge Resolution Space group Point group
-Rmerge_XDS=$(grep 'Rmerge  (all I+ and I-)' XDS_SUMMARY/XDS_SUMMARY.log | awk '{print $6}')
-Resolution_XDS=$(grep 'High resolution limit' XDS_SUMMARY/XDS_SUMMARY.log | awk '{print $4}')
-SG_XDS=$(grep 'Space group:' XDS_SUMMARY/XDS_SUMMARY.log | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ //g')
-PointGroup_XDS=$(${SOURCE_DIR}/sg2pg.sh ${SG_XDS})
-Completeness_XDS=$(grep 'Completeness' XDS_SUMMARY/XDS_SUMMARY.log | awk '{print $2}')
-
-#Determine running successful or failed using Rmerge 
-if [ "${Rmerge_XDS}" = "" ];then
-    FLAG_XDS=0
-    echo "Round ${ROUND} XDS processing failed!"
-    mv XDS_SUMMARY/XDS_SUMMARY.log XDS_${ROUND}/XDS_SUMMARY.log
-    rm XDS_SUMMARY/*
-    exit
-elif [ $(echo "${Rmerge_XDS} <= 0" | bc) -eq 1 ] || [ $(echo "${Rmerge_XDS} >= 100" | bc) -eq 1 ];then
-    FLAG_XDS=0
-    echo "Round ${ROUND} XDS processing failed!"
-    mv XDS_SUMMARY/XDS_SUMMARY.log XDS_${ROUND}/XDS_SUMMARY.log
-    rm XDS_SUMMARY/*
-    exit
-else
-    FLAG_XDS=1
-    echo "Round ${ROUND} XDS processing succeeded!"
-    echo "XDS ${Rmerge_XDS} ${Resolution_XDS} ${PointGroup_XDS} ${Completeness_XDS}" >> ../temp1.txt
-fi
-
 #For invoking in autopipeline_parrallel.sh
-echo "FLAG_XDS=${FLAG_XDS}" >> ../temp.txt
+echo "FLAG_XDS=1" >> ../temp.txt
+echo "Round ${ROUND} XDS processing succeeded!"
+
+#Check Anomalous Signal strong anomalous signal
+if grep -q "strong anomalous signal" "XDS_SUMMARY/XDS_SUMMARY.log" && grep -q "Estimate of the resolution limit" "XDS_SUMMARY/XDS_SUMMARY.log"; then
+    echo "Strong anomalous signal found in XDS.mtz"
+    cp XDS_SUMMARY/XDS.mtz ../SAD_INPUT
+fi
 
 #Extract statistics data
 mkdir -p STATISTICS_FIGURES

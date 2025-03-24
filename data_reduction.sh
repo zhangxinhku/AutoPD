@@ -10,30 +10,36 @@
 start_time=$(date +%s)
 
 #Input variables
-for arg in "$@"; do
-    IFS="=" read -r key value <<< "$arg"
-    case $key in
-        space_group) SPACE_GROUP="$value" ;;
-        cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
-    esac
-done
+#for arg in "$@"; do
+#    IFS="=" read -r key value <<< "$arg"
+#    case $key in
+#        space_group) SPACE_GROUP="$value" ;;
+#        cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
+#    esac
+
+#done
+#if [[ -n "$CELL_CONSTANTS_INPUT" ]]; then
+#    UNIT_CELL="\"$(echo "$CELL_CONSTANTS_INPUT" | tr ',，' ' ')\""
+#    UNIT_CELL_CONSTANTS=\"${UNIT_CELL_CONSTANTS}\"
+#fi
 
 #Optional parameters
-args=()
+#args=()
 
-for param in "sp=${SPACE_GROUP}" "cell_constants=${UNIT_CELL_CONSTANTS}"; do
-    IFS="=" read -r key value <<< "$param"
-    [ -n "$value" ] && args+=("$key=$value")
-done
+#for param in "sp=${SPACE_GROUP}" "cell_constants=${UNIT_CELL_CONSTANTS}"; do
+#    IFS="=" read -r key value <<< "$param"
+#    [ -n "$value" ] && args+=("$key=$value")
+#done
+#echo ${args[@]}
 
 #Determine file type
 FILE_TYPE=$(find "${DATA_PATH}" -maxdepth 1 -type f ! -name '.*' | head -n 1 | awk -F. '{if (NF>1) print $NF}')
-export FILE_TYPE="${FILE_TYPE}"
+export FILE_TYPE
 
 #Create and enter folder for data reduction
 mkdir -p DATA_REDUCTION
 cd DATA_REDUCTION
-mkdir -p DATA_REDUCTION_SUMMARY
+mkdir -p DATA_REDUCTION_SUMMARY SAD_INPUT
 
 #Extract header information
 ${SOURCE_DIR}/header.sh > header.log
@@ -44,7 +50,7 @@ echo "-------------------------------- First round data processing -------------
 echo ""
 ROUND=1
 
-parallel -u "{}" ::: "${SOURCE_DIR}/xds.sh round=${ROUND} ${args[@]}" "${SOURCE_DIR}/xds_xia2.sh round=${ROUND} ${args[@]}" "${SOURCE_DIR}/dials_xia2.sh round=${ROUND} ${args[@]}" "${SOURCE_DIR}/autoproc.sh round=${ROUND} ${args[@]}"
+parallel -u "{}" ::: "${SOURCE_DIR}/xds.sh round=${ROUND}" "${SOURCE_DIR}/xds_xia2.sh round=${ROUND}" "${SOURCE_DIR}/dials_xia2.sh round=${ROUND}" "${SOURCE_DIR}/autoproc.sh round=${ROUND}"
 
 #Set Flags
 flags=("FLAG_XDS" "FLAG_XDS_XIA2" "FLAG_DIALS_XIA2" "FLAG_autoPROC")
@@ -56,7 +62,7 @@ done
 
 #Second round data processing
 echo ""
-if [[ (${FLAG_XDS} -eq 1 && ${FLAG_XDS_XIA2} -eq 1 && ${FLAG_DIALS_XIA2} -eq 1 && ${FLAG_autoPROC} -eq 1) ]]; then
+if [[ (${FLAG_XDS} -eq 1 && ${FLAG_XDS_XIA2} -eq 1 && ${FLAG_DIALS_XIA2} -eq 1 && ${FLAG_autoPROC} -eq 1) ]] || [[ -n "$CELL_CONSTANTS_INPUT" ]]; then
     echo "No need for second round data processing."
 elif [[ (${FLAG_XDS} -eq 0 && ${FLAG_XDS_XIA2} -eq 0 && ${FLAG_DIALS_XIA2} -eq 0 && ${FLAG_autoPROC} -eq 0) ]];then
     echo "Data reduction failed."
@@ -91,7 +97,7 @@ fi
 echo ""
 echo "Data reduction summary:"
 echo ""
-echo "           Resolution   Rmerge   I/Sigma   CC(1/2)   Completeness   Multiplicity   Space group                           Cell"
+echo "           Resolution   Rmerge   Rmeas   I/Sigma   CC(1/2)   Completeness   Multiplicity   Space group                           Cell"
 echo ""
 
 # Function to extract values from log files
@@ -102,6 +108,7 @@ extract_values() {
     if [ -f "${log_file}" ]; then
         local resolution=$(grep 'High resolution limit' ${log_file} | awk '{print $4}')
         local rmerge=$(grep 'Rmerge  (all I+ and I-)' ${log_file} | awk '{print $6}')
+        local rmeas=$(grep 'Rmeas (all I+ & I-)' ${log_file} | awk '{print $6}')
         local i_over_sigma=$(grep 'Mean((I)/sd(I))' ${log_file} | awk '{print $2}')
         local cc_half=$(grep 'Mn(I) half-set correlation CC(1/2)' ${log_file} | awk '{print $5}')
         local completeness=$(grep 'Completeness' ${log_file} | awk '{print $2}')
@@ -109,8 +116,8 @@ extract_values() {
         local space_group=$(grep 'Space group:' ${log_file} | cut -d ':' -f 2 | sed 's/ //g')
         local cell=$(grep 'Unit cell:' ${log_file} | cut -d ':' -f 2 | sed 's/^ *//g' | sed 's/ *$//g' | sed 's/  */ /g')
 
-        printf "%-10s  %.2f       %.3f      %.1f     %.3f        %.1f           %.1f          %s     %.4f %.4f %.4f %.4f %.4f %.4f\n" \
-       "${prefix}" ${resolution} ${rmerge} ${i_over_sigma} ${cc_half} ${completeness} ${multiplicity} ${space_group} ${cell}
+        printf "%-10s  %.2f       %.3f      %.3f     %.1f     %.3f        %.1f           %.1f          %s     %.4f %.4f %.4f %.4f %.4f %.4f\n" \
+       "${prefix}" ${resolution} ${rmerge} ${rmeas} ${i_over_sigma} ${cc_half} ${completeness} ${multiplicity} ${space_group} ${cell}
         echo ""
     fi
 }

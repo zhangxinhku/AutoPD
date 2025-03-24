@@ -15,23 +15,36 @@ echo ""
 
 #Input variables
 MTZ=$(readlink -f "${1}")
-PDB=$(readlink -f "${2}")
+
+if [ -f "SUMMARY/BUCCANEER.pdb" ] && [ $(echo "$r_free_buccaneer < $r_free_refine" | bc) -eq 1 ] && [ $(echo "$r_free_buccaneer > 0" | bc) -eq 1 ]; then
+    PDB=$(readlink -f "SUMMARY/BUCCANEER.pdb")
+elif [ -f "SUMMARY/REFINEMENT.pdb" ] && [ $(echo "$r_free_refine > 0" | bc) -eq 1 ]; then
+    PDB=$(readlink -f "SUMMARY/REFINEMENT.pdb")
+else
+    PDB=$(readlink -f "SUMMARY/PHASER.1.pdb")
+fi
 
 #Create folder for Phenix Autobuild
 rm -rf AUTOBUILD
 mkdir -p AUTOBUILD
 cd AUTOBUILD
-mkdir -p AUTOBUILD_SUMMARY
 
 #Get the processor number
 nproc=$(nproc)
 
 #phenix.autobuild
-phenix.autobuild data=${MTZ} model=${PDB} nproc=4  > AUTOBUILD.log
+phenix.autobuild data=${MTZ} model=${PDB} nproc=$nproc  > AUTOBUILD.log
+
+if [ ! -f "AutoBuild_run_1_/overall_best.pdb" ] && [[ "$PDB" == *BUCCANEER.pdb ]] && [ -f "../SUMMARY/REFINEMENT.pdb" ]; then
+    PDB=$(readlink -f "../SUMMARY/REFINEMENT.pdb")
+    rm -rf ./*
+    phenix.autobuild data=${MTZ} model=${PDB} nproc=$nproc  > AUTOBUILD.log
+fi
 
 awk '/SOLUTION/,/Citations for AutoBuild:/' AUTOBUILD.log
 
 #Copy output files to SUMMARY folder
+mkdir -p AUTOBUILD_SUMMARY
 cp AutoBuild_run_1_/overall_best.pdb AUTOBUILD_SUMMARY/AUTOBUILD.pdb
 cp AutoBuild_run_1_/overall_best_denmod_map_coeffs.mtz AUTOBUILD_SUMMARY/AUTOBUILD.mtz
 mv AUTOBUILD.log AUTOBUILD_SUMMARY/AUTOBUILD.log

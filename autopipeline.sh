@@ -20,13 +20,19 @@ ROTATION_AXIS=""
 OUT_DIR="AutoPD_processed"
 DATE=""
 Z=""
-ATOM=""
+ATOM="Se"
 SPACE_GROUP=""
+CELL_CONSTANTS=""
 BEAM_X=""
 BEAM_Y=""
+DISTANCE=""
+IMAGE_START=""
+IMAGE_END=""
 IPCAS_CYCLE="20"
 AF_PREDICT="false"
 PAE_SPLIT="false"
+SAD="false"
+MODEL_BUILD=""
 
 for arg in "$@"; do
   if [[ "$arg" == *=* ]]; then
@@ -41,14 +47,20 @@ for arg in "$@"; do
       rotation_axis) ROTATION_AXIS="$value";;    #Rotation axis, e.g. 1,0,0
       out_dir) OUT_DIR="$value";;                #Output folder name
       mp_date) DATE="$value";;                   #The homologs released after this date will be excluded from the result of MrParse, for data testing.
-      z) Z="$value";;                            #The number of asymmetric unit copies 
+      z) Z_INPUT="$value";;                      #The number of asymmetric unit copies 
       atom) ATOM="$value";;                      #The atom type of anomalous scattering
-      space_group) SPACE_GROUP="$value";;        #Space group
+      space_group) SPACE_GROUP_INPUT="$value";;        #Space group
+      cell) CELL_CONSTANTS_INPUT="$value";;            #Cell Parameters
       beam_x) BEAM_X="$value" ;;                 #Beam center x
       beam_y) BEAM_Y="$value" ;;                 #Beam center y
+      distance) DISTANCE="$value" ;;             #The crystal to detector distance
+      image_start) IMAGE_START="$value" ;;       #Process a specific image range within a scan. image_start and image_end are numbers denoting the image range
+      image_end) IMAGE_END="$value" ;;           #Process a specific image range within a scan. image_start and image_end are numbers denoting the image range
       ipcas_cycle) IPCAS_CYCLE="$value" ;;       #IPCAS cycle
       af_predict) AF_PREDICT="$value" ;;         #AlphaFold Prediction by Phenix
-      pae_split) PAE_SPLIT="$value" ;;         #PAE Splitting by CCP4
+      pae_split) PAE_SPLIT="$value" ;;           #PAE Splitting by CCP4
+      sad) SAD="$value" ;;                       #SAD will be performed
+      model_build) MODEL_BUILD="$value" ;;       #Model building strategy
       *) echo "Invalid parameter: $arg" >&2; exit 1;;
     esac
   else
@@ -61,7 +73,7 @@ SEQUENCE=$(readlink -f "${SEQUENCE}")
 EXPERIMENT=$(readlink -f "${EXPERIMENT}")
 MR_TEMPLATE_PATH=$(readlink -f "${MR_TEMPLATE_PATH}")
 
-export SOURCE_DIR DATA_PATH SEQUENCE ROTATION_AXIS BEAM_X BEAM_Y ATOM AF_PREDICT PAE_SPLIT
+export SOURCE_DIR DATA_PATH SEQUENCE ROTATION_AXIS BEAM_X BEAM_Y DISTANCE IMAGE_START IMAGE_END Z_INPUT ATOM SPACE_GROUP_INPUT CELL_CONSTANTS_INPUT AF_PREDICT PAE_SPLIT IPCAS_CYCLE MODEL_BUILD 
 
 #Create and enter folder for data processing
 if [ -d "$OUT_DIR" ]; then
@@ -74,7 +86,7 @@ fi
 
 mkdir -p ${OUT_DIR}
 cd ${OUT_DIR}
-mkdir -p SUMMARY INPUT_FILES
+mkdir -p SUMMARY INPUT_FILES SEARCH_MODELS/HOMOLOGS SEARCH_MODELS/AF_MODELS SEARCH_MODELS/INPUT_MODELS
 
 #Input check
 if [ -z "${DATA_PATH}" ]; then
@@ -113,14 +125,6 @@ else
     DR="false"
 fi
 
-if [ -z "${ATOM}" ]; then
-    SAD="false"
-    mkdir -p SEARCH_MODELS/HOMOLOGS SEARCH_MODELS/AF_MODELS SEARCH_MODELS/INPUT_MODELS
-else
-    SAD="true"
-    MP="false"
-fi
-
 if [ -z "${MR_TEMPLATE_PATH}" ]; then
     echo "No molecular replacement template was input."
 elif [ ! -e "${MR_TEMPLATE_PATH}" ]; then
@@ -137,6 +141,14 @@ echo "==========================================================================
 echo "                                   Data reduction & MrParse                                  "
 echo "============================================================================================="
 
+#Optional parameters
+#args=()
+#for param in "space_group=${SPACE_GROUP}" "cell_constants=${CELL_CONSTANTS}"; do
+#    IFS="=" read -r key value <<< "$param"
+#    [ -n "$value" ] && args+=("$key=$value")
+#done
+#echo ${args[@]}
+
 if [ "${DR}" = "false" ] && [ "${MP}" = "false" ]; then
   echo ""
   echo "Data reduction and MrParse will be skipped."
@@ -147,9 +159,9 @@ elif [ "${DR}" = "false" ]; then
 elif [ "${MP}" = "false" ]; then
   echo ""
   echo "MrParse will be skipped."
-  ${SOURCE_DIR}/data_reduction.sh space_group=${SPACE_GROUP} | tee DATA_REDUCTION.log
+  ${SOURCE_DIR}/data_reduction.sh | tee DATA_REDUCTION.log
 else    
-  parallel -u ::: "${SOURCE_DIR}/search_model.sh ${DATE} | tee SEARCH_MODEL.log" "${SOURCE_DIR}/data_reduction.sh space_group=${SPACE_GROUP} | tee DATA_REDUCTION.log"
+  parallel -u ::: "${SOURCE_DIR}/search_model.sh ${DATE} | tee SEARCH_MODEL.log" "${SOURCE_DIR}/data_reduction.sh | tee DATA_REDUCTION.log"
 fi
 
 if [ ! -f "${SEQUENCE}" ]; then 
@@ -164,100 +176,40 @@ fi
 
 #SAD
 
-if [ "${SAD}" = "true" ]; then
-    echo ""
-    echo "============================================================================================="
-    echo "                                             SAD                                             "
-    echo "============================================================================================="
-    
-    ${SOURCE_DIR}/sad.sh ${MTZ_IN}
-    
-    #Calculate and echo timing information
-    end_time=$(date +%s)
-    total_time=$((end_time - start_time))
-    hours=$((total_time / 3600))
-    minutes=$(( (total_time % 3600) / 60 ))
-    seconds=$((total_time % 60))
-    echo "Total time: ${hours}h ${minutes}m ${seconds}s"
-    exit
+if [ -d "DATA_REDUCTION/SAD_INPUT" ] && find "DATA_REDUCTION/SAD_INPUT" -maxdepth 1 -type f -size +0 2>/dev/null | grep -q .; then
+    SAD="true"
+    echo "SAD will be performed."
+else
+    echo "No strong anomalous signal was found."
 fi
 
 #MR
 
 if [ -z "$(find SEARCH_MODELS -maxdepth 2 -type f -name '*.pdb')" ]; then
-    echo "ERROR: No search model found."
-    exit 1
+    echo "No search model was found."
+    MR="false"
 fi
 
 echo ""
 echo "============================================================================================="
-echo "                                    Molecular Replacement                                    "
+echo "                                 Molecular Replacement & SAD                                 "
 echo "============================================================================================="
 
-${SOURCE_DIR}/mr.sh ${MTZ_IN} ${Z}
-
-if [ -s "PHASER_MR/MR_SUMMARY/MR_BEST.txt" ]; then
+if [ "${MR}" = "false" ] && [ "${SAD}" != "true" ]; then
   echo ""
-  echo "Refinement Results:"
-  awk '{print $1, "R-work="$6, "R-free="$7}' PHASER_MR/MR_SUMMARY/MR_BEST.txt
-# r_free_refine=$(sort -k6,6n "PHASER_MR/MR_SUMMARY/MR_BEST.txt" | awk 'NR==1 {print $7}')
-#  r_work=$(sort -k6,6n "PHASER_MR/MR_SUMMARY/MR_BEST.txt" | awk 'NR==1 {print $5}')
-else
+  echo "Both MR and SAD cannot be performed."
   exit 1
-fi
-
-#Model building
-#Buccaneer
-echo ""
-echo "============================================================================================="
-echo "                                         Model building                                      "
-echo "============================================================================================="
-echo ""
-echo "Buccaneer will be performed."
-
-${SOURCE_DIR}/buccaneer.sh
-r_free=$(grep 'FREE R VALUE                     :' "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
-
-PDB=$(readlink -f "SUMMARY/PHASER.1.pdb")
-if [ -f "SUMMARY/PHASER.1.mtz" ]; then
-  MTZ="SUMMARY/PHASER.1.mtz"
-else
-  MTZ=$(find SUMMARY -type f -name "*.mtz" ! -name "BUCCANEER.mtz" ! -name "REFINEMENT.mtz" -print -quit)
-fi
-
-
-#Phenix Autobuild
-if [ ! -f "BUCCANEER/BUCCANEER_SUMMARY/BUCCANEER.pdb" ] || [ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ]; then
-    echo ""
-    echo "Phenix Autobuild will be performed."
-    
-    ${SOURCE_DIR}/autobuild.sh ${MTZ} ${PDB}
-    
-    if [ -f "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" ]; then
-        cp AUTOBUILD/AUTOBUILD_SUMMARY/* SUMMARY/
-        r_free=$(grep 'FREE R VALUE                     :' "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
-    else
-        echo "AUTOBUILD.pdb does not exist."
-    fi
-    
-    #IPCAS       
-    if [ ! -f "AUTOBUILD/AUTOBUILD_SUMMARY/AUTOBUILD.pdb" ] || [ "$(echo "${r_free} > 0.35" | bc)" -eq 1 ]; then
-        echo ""
-        echo "IPCAS 2.0 will be performed."
-        "${SOURCE_DIR}/ipcas.sh" "${MTZ}" "${PDB}" "${SEQUENCE}" 0.5 ${IPCAS_CYCLE} . > IPCAS.log
-        echo ""
-        cat IPCAS/result
-        mv IPCAS.log IPCAS/Summary/
-    
-        if [ "$(ls -A IPCAS/Summary/)" ]; then
-            cp IPCAS/Summary/Free_*.mtz SUMMARY/IPCAS.mtz
-            cp IPCAS/Summary/Free_*.pdb SUMMARY/IPCAS.pdb
-            cp IPCAS/Summary/IPCAS.log SUMMARY/
-        else
-            echo "IPCAS.pdb does not exist."
-        fi
-    fi
-fi
+elif [ "${MR}" = "false" ]; then
+  echo ""
+  echo "MR will be skipped."
+  ${SOURCE_DIR}/sad.sh ${MTZ_IN}
+elif [ "${SAD}" != "true" ]; then
+  echo ""
+  echo "SAD will be skipped."
+  ${SOURCE_DIR}/mr_model_build.sh ${MTZ_IN}
+else    
+  parallel -u ::: "${SOURCE_DIR}/sad.sh ${MTZ_IN}" "${SOURCE_DIR}/mr_model_build.sh ${MTZ_IN}"
+fi 
 
 #Calculate and echo timing information
 end_time=$(date +%s)

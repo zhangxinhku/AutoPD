@@ -11,14 +11,13 @@ start_time=$(date +%s)
 
 #Input variables
 MTZ_IN=${1}
-Z_NUMBER=${2}
 
-#Rename search models
 rename_pdb_files() {
   local directory=$1
   if [ -d "$directory" ] && [ "$(ls -A "$directory")" ]; then
     local counter=1
-    for file in "$directory"/*.pdb; do
+    # 按数字排序处理文件
+    for file in $(ls "$directory"/*.pdb | sort -V); do
       new_name="$directory/ENSEMBLE${counter}.pdb"
       mv -f "$file" "$new_name" 2>/dev/null || true
       ((counter++))
@@ -51,14 +50,16 @@ fi
 #Determine the number of search models
 if [ -d "../SEARCH_MODELS/INPUT_MODELS" ] && [ "$(ls -A ../SEARCH_MODELS/INPUT_MODELS)" ]; then
   TEMPLATE_NUMBER=$(ls ../SEARCH_MODELS/INPUT_MODELS/*.pdb | wc -l)
-  ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER} "${mtz_dir}" ../SEARCH_MODELS/INPUT_MODELS I ${Z_NUMBER}
+  timeout 60h ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER} ${mtz_dir} ../SEARCH_MODELS/INPUT_MODELS I
 elif [ -d "../SEARCH_MODELS/HOMOLOGS" ] && [ "$(ls -A ../SEARCH_MODELS/HOMOLOGS)" ]; then
   TEMPLATE_NUMBER_H=$(ls ../SEARCH_MODELS/HOMOLOGS/*.pdb | wc -l)
   TEMPLATE_NUMBER_AF=$(ls ../SEARCH_MODELS/AF_MODELS/*.pdb | wc -l)
-  parallel -u ::: "${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER_H} "${mtz_dir}" ../SEARCH_MODELS/HOMOLOGS H ${Z_NUMBER}" "${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER_AF} "${mtz_dir}" ../SEARCH_MODELS/AF_MODELS A ${Z_NUMBER}"
+  parallel -u ::: \
+    "timeout 60h ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER_H} ${mtz_dir} ../SEARCH_MODELS/HOMOLOGS H" \
+    "timeout 60h ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER_AF} ${mtz_dir} ../SEARCH_MODELS/AF_MODELS A"
 else
   TEMPLATE_NUMBER=$(ls ../SEARCH_MODELS/AF_MODELS/*.pdb | wc -l)
-  ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER} "${mtz_dir}" ../SEARCH_MODELS/AF_MODELS A ${Z_NUMBER}
+  timeout 60h ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER} ${mtz_dir} ../SEARCH_MODELS/AF_MODELS A
 fi
 
 #Extract and show MR results

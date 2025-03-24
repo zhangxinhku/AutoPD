@@ -21,6 +21,8 @@ mkdir SAD_SUMMARY
 #Get mtz files folder
 if [ "${MTZ_IN}" -eq 1 ]; then
   summary_dir=$(realpath ../INPUT_FILES)
+elif find "../DATA_REDUCTION/SAD_INPUT" -maxdepth 1 -type f -size +0 | grep -q .; then
+  summary_dir=$(realpath ../DATA_REDUCTION/SAD_INPUT)
 else
   summary_dir=$(realpath ../DATA_REDUCTION/DATA_REDUCTION_SUMMARY)
 fi
@@ -88,6 +90,7 @@ seconds=$((total_time % 60))
 
 echo "" | tee -a SAD_SUMMARY/crank2.log
 echo "SAD took: ${hours}h ${minutes}m ${seconds}s" | tee -a SAD_SUMMARY/crank2.log
+echo ""
 
 #Go to data processing folder
 cd ..

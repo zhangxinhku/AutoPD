@@ -1,11 +1,11 @@
+#!/bin/bash 
 #Input variables
 TEMPLATE_NUMBER=${1}
 MTZ_DIR=${2}
 ENSEMBLE_PATH=$(readlink -f "${3}")
 FLAG=${4}
-Z_NUMBER=${5}
 
-mtz_files=($(ls "${MTZ_DIR}"/*.mtz))
+mtz_files=($(ls "${MTZ_DIR}"/*.mtz))  
 num_mtz_files=${#mtz_files[@]}
 
 solution_num=0
@@ -17,34 +17,15 @@ for ((i=1; i<=num_mtz_files; i++)); do
   cd MR_${FLAG}_$i
   cp ${mtz_file} .
   
-  if [[ -z "${Z_NUMBER}" ]]; then
-    #phaser_cca
-    phaser << eof > phaser_cca.log
-    TITLE phaser_cca
-    MODE CCA
-    ROOT PHASER_CCA
-    HKLIN ${mtz_file}
-    LABIN F=F SIGF=SIGF
-    COMPOSITION BY ASU
-    COMPOSITION PROTEIN SEQ ${SEQUENCE} NUM 1
-eof
-
-    #Extract NUMBER from phaser_cca result
-    CCA_EXIT_STATUS=$(grep 'EXIT STATUS:' phaser_cca.log | awk '{print $3}')
-
-    Z_NUMBER=$(awk '/loggraph/{flag=1;next}/\$\$/{flag=0}flag' phaser_cca.log | sort -k2,2nr | head -n 1 | awk '{print $1}')
-
-    echo ""
-    echo "MR_${FLAG}_$i Phaser CCA EXIT STATUS: ${CCA_EXIT_STATUS}"
-    
-    if [ ${CCA_EXIT_STATUS} == "FAILURE" ]; then
-      Z_NUMBER=1
-    else
-      echo ""
-      echo "MR_${FLAG}_$i Most probable Z=${Z_NUMBER}"
-    fi
+  if [[ -z "${Z_INPUT}" ]]; then
+    phenix.xtriage ${mtz_file} ${SEQUENCE} obs_labels='F,SIGF' > xtriage.log
+    #Extract NUMBER from phenix.xtriage result
+    Z_NUMBER=$(grep 'Best guess :' xtriage.log | awk '{print $4}')
+    Z_NUMBER=${Z_NUMBER:-1}
+    echo "MR_${FLAG}_$i Most probable Z=${Z_NUMBER}"
   else
-    echo "Input Z=${Z_NUMBER}"
+    echo "Input Z=${Z_INPUT}"
+    Z_NUMBER=${Z_INPUT}
   fi
 
   echo "TITLE phaser_mr
@@ -77,5 +58,4 @@ SGALTERNATIVE SELECT ALL" > phaser_input.txt
   cd ..
   Z_NUMBER=""
 done
-#IDENTITY ${IDENTITY}
 wait 

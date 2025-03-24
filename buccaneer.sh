@@ -48,22 +48,33 @@ echo "All Buccaneer processes finished!"
 echo ""
 
 cd "$start_dir" || exit
-best_r_free=99999
+
+#Determine best results
 
 for folder in BUCCANEER_MR*; do
   if [ -d "$folder" ]; then
     folder_name=$(basename "$folder")
+    mr_folder_name="${folder_name#*_}"
     r_work=$(grep 'R VALUE            (WORKING SET) :' "$folder_name/XYZOUT.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
     r_free=$(grep 'FREE R VALUE                     :' "$folder_name/XYZOUT.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
+    r_free_refine=$(grep 'FREE R VALUE                     :' "../PHASER_MR/$mr_folder_name/REFINEMENT/XYZOUT.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
     echo "$folder_name: R-work=$r_work  R-free=$r_free"
     r_free=${r_free:-99999}
-  
-    if (( $(echo "$r_free < $best_r_free" | bc -l) )); then
-      best_r_free=$r_free
-      best="${folder_name#*_}"
-    fi
+    r_free_refine=${r_free_refine:-99999}
+    echo "$mr_folder_name $r_free_refine $r_free" >> BUCCANEER_SUMMARY/SUMMARY.txt
   fi
 done
+
+best_r_free=$(sort -k3,3n "BUCCANEER_SUMMARY/SUMMARY.txt" | awk 'NR==1 {print $3}')
+best_r_free_refine=$(sort -k3,3n "BUCCANEER_SUMMARY/SUMMARY.txt" | awk 'NR==1 {print $2}')
+best_r_free=${best_r_free:-99}
+best_r_free_refine=${best_r_free_refine:-99}
+
+if [ $(echo "$best_r_free < $best_r_free_refine" | bc) -eq 1 ]; then
+    best=$(sort -k3,3n "BUCCANEER_SUMMARY/SUMMARY.txt" | awk 'NR==1 {print $1}')
+else
+    best=$(sort -k2,2n "BUCCANEER_SUMMARY/SUMMARY.txt" | awk 'NR==1 {print $1}')
+fi
 
 #Output Buccaneer results
 if [ -n "$best" ]; then
