@@ -21,6 +21,11 @@ sudo apt install parallel
 ```
 sudo apt install gnuplot
 ```
+### pandas
+```
+sudo apt install python3-pip
+pip install pandas
+```
 ### IPCAS (optional)
 The installation package for IPCAS can be found on the main page. Follow these commands to install:
 ```
@@ -52,7 +57,7 @@ To install AutoPD, download and unpack the repository. Remember to add the follo
 export PATH=<path>/AutoPD/:$PATH
 ```
 
-Please note an issue with the ProvideAsuContents.py file in the CCP4 installation folder. For Buccaneer to run successfully, replace the existing ProvideAsuContents.py (located at `$CCP4/lib/python3.9/site-packages/ccp4i2/wrappers/ProvideAsuContents/script/ProvideAsuContents.py`) and CCP4I2Runner.py (located at `$CCP4/lib/python3.9/site-packages/ccp4i2/core/CCP4I2Runner.py`) with the version provided in the main branch (contributed by Stuart McNicholas).
+Please note an issue with the ProvideAsuContents.py file in the CCP4 installation folder. For Buccaneer to run successfully, replace the existing ProvideAsuContents.py (located at `$CCP4/lib/python3.9/site-packages/ccp4i2/wrappers/ProvideAsuContents/script/ProvideAsuContents.py`) and CCP4I2Runner.py (located at `$CCP4/lib/python3.9/site-packages/ccp4i2/core/CCP4I2Runner.py`) with the version provided in the main branch (contributed by Stuart McNicholas). These files are only applicable to CCP4-9.
 
 ## Usage
 AutoPD is straightforward to use. Provide the path to your diffraction data and sequence file, then execute the command as follows:
@@ -60,14 +65,20 @@ AutoPD is straightforward to use. Provide the path to your diffraction data and 
 autopipeline.sh data_path=<path_to_diffraction_data> seq_file=<path_to_sequence>/sequence.fasta out_dir=<output_folder_name> | tee output.log
 ```
 AutoPD supports optional parameters for enhanced flexibility:  
-- **mtz_file=<path_to_mtz_file>/data.mtz**:   Skips data reduction if provided.  
-- **pdb_path=<path_to_pdb_files>**:           Uses provided PDB files for MR, skipping search model generation.  
+- **mtz_file=<path_to_mtz_file>/data.mtz**:   Skips data reduction if provided. AutoPD assumes that the labels in mtz file are F SIGF FreeR_flag or FP SIGFP FreeR_flag.
+- **pdb_path=<path_to_pdb_files>**:           Uses provided PDB files for MR, skipping search model generation.
+- **image_start=91 image_end=1300**:          Custom image range.
 - **rotation_axis=0,0,1**:                    Custom rotation axis for data reduction.
 - **beam_x=1200 beam_y=1300**:                Custom beam center in pixels.
+- **distance=320**:                           Crystal to detector distance in mm.
+- **space_group=P121**:                       Space group.
+- **cell=30,40,50,70,80,90**:                 Unit cell parameters.
 - **z=1**:                                    The number of asymmetric unit copies.
-- **atom=se**:                                The atom type of anomalous scattering.
-- **space_group=P43212**:                     Space group.
-- **mp_date=yyyy-mm-dd**:                     Excludes homologs released after this date for MrParse, useful for data tests.  
+- **atom=Se**:                                The atom type of anomalous scattering.
+- **mp_date=yyyy-mm-dd**:                     Excludes homologs released after this date for MrParse, useful for data tests.
+- **pae_split=true**:                         AlphaFold models will be split according to PAE matrix.
+- **af_predict=true**:                        Enforce AlphaFold prediction.
+- **sad=true**:                               Enforce SAD phasing.
 
 ## Note
-Currently, AutoPD supports only command-line executions and has been tested exclusively on the Ubuntu 22.04 operating system. The compatibility with other operating systems has not been established. For any inquiries or issues, please reach out to Xin at zx2020@connect.hku.hk.
+Currently, AutoPD supports only command-line executions and has been tested exclusively on the Ubuntu 22.04 operating system. The compatibility with other operating systems has not been established. If you have any questions or issues, please contact Xin at zx2020@connect.hku.hk.
