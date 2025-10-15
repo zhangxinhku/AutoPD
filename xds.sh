@@ -1,16 +1,45 @@
 #!/bin/bash
 #############################################################################################################
 # Script Name: xds.sh
-# Description: This script is used for XDS.
-# Author: ZHANG Xin
-# Date Created: 2023-06-01
-# Last Modified: 2024-03-05
+# Description: Automated pipeline for processing X-ray diffraction data with XDS and CCP4 tools.
+#              This script runs XDS in sequential steps (XYCORR → INIT → COLSPOT → IDXREF … → CORRECT),
+#              performs scaling and merging with XSCALE and AIMLESS, evaluates resolution with DIALS,
+#              and prepares an MTZ file for structure determination. It also extracts useful statistics
+#              and generates summary reports and plots.
+#
+# Usage Example:
+#   ./xds.sh round=1 flag=0 sp="P212121" cell_constants="78.3 84.1 96.5 90 90 90"
+#
+# Required Environment Variables:
+#   SOURCE_DIR     Path to helper scripts (e.g., generate_XDS.INP, plot.sh, get_sg_number.sh)
+#   DATA_PATH      Directory containing diffraction image files
+#   FILE_TYPE      Format of diffraction images (e.g., h5, cbf, bz2, img)
+#
+# Optional Variables:
+#   BEAM_X, BEAM_Y           Beam center coordinates (pixels)
+#   DISTANCE                 Crystal-to-detector distance (mm)
+#   IMAGE_START, IMAGE_END   Image range to process
+#   ROTATION_AXIS            Rotation axis vector (comma-separated, e.g. "1,0,0")
+#   SPACE_GROUP              Space group symbol (e.g., "P212121")
+#   UNIT_CELL_CONSTANTS      Unit cell parameters "a b c alpha beta gamma"
+#
+# Exit Codes:
+#   0  Success
+#   1  Failure during XDS or subsequent steps
+#
+# Author:      ZHANG Xin
+# Created:     2023-06-01
+# Last Edited: 2025-08-03
 #############################################################################################################
+
+# Enable extended pattern matching
 shopt -s extglob
 
 start_time=$(date +%s)
 
-#Input variables
+#############################################
+# Parse command-line arguments
+#############################################
 for arg in "$@"; do
     IFS="=" read -r key value <<< "$arg"
     case $key in
@@ -21,6 +50,8 @@ for arg in "$@"; do
         cell_constants) UNIT_CELL_CONSTANTS="$value" ;;
     esac
 done
+
+# Allow override from input variables
 if [[ -n "$SPACE_GROUP_INPUT" ]]; then
     SPACE_GROUP=$SPACE_GROUP_INPUT
 fi
@@ -28,7 +59,9 @@ if [[ -n "$CELL_CONSTANTS_INPUT" ]]; then
     UNIT_CELL_CONSTANTS=$CELL_CONSTANTS_INPUT
 fi
 
-#Determine whether running this script according to Flag_XDS
+#############################################
+# Determine whether running this script according to Flag_XDS
+#############################################
 case "${FLAG_XDS}" in
     "")
         mkdir -p XDS
@@ -37,24 +70,28 @@ case "${FLAG_XDS}" in
         cd ..
         ;;
     "1")
-        exit
+        exit # Skip processing if flag is set
         ;;
 esac
 
-#Create folder for XDS processing
 cd XDS
 mkdir -p XDS_${ROUND}
 cd XDS_${ROUND}
 
-#Generate datapath for generate_XDS.INP
+#############################################
+# Identify diffraction data file template
+#############################################
 case "${FILE_TYPE}" in
   "h5")
+    # Look for master HDF5 file
     filename=$(find "${DATA_PATH}" -maxdepth 1 -type f ! -name '.*' -name "*master.h5" -printf "%f")
     ;;
   +([0-9]))
+    # Replace numeric suffix with question marks (wildcard for XDS)
     filename=$(basename $(find ${DATA_PATH} -type f ! -name '.*' -name "*.[0-9]*" | head -1) | perl -pe 's/(\d+)$/ "?" x length($1) /e')
     ;;
   "bz2")
+    # Handle compressed data with numeric suffixes
     filename=$(basename $(find ${DATA_PATH} -type f -name "*.bz2" | head -1))
     base=${filename%.*}
     middle=${base#*.*}
@@ -73,6 +110,7 @@ case "${FILE_TYPE}" in
     esac
     ;;
   *)
+    # Generic file type handling(e.g., img, cbf)
     filename=$(ls ${DATA_PATH}/*.${FILE_TYPE} 2>/dev/null | head -1)
     filename=$(basename "${filename}")
     base=${filename%.*}
@@ -88,42 +126,46 @@ case "${FILE_TYPE}" in
     ;;
 esac
 
+# Log data output
 echo "Data: ${DATA_PATH}/${filename}" > XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
-#Generate XDS.INP XSCALE.INP
+#############################################
+# Generate input files for XDS and XSCALE
+#############################################
 ${SOURCE_DIR}/generate_XDS.INP "${DATA_PATH}/${filename}" > generate_XDS.log
 cat generate_XDS.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 cp ${SOURCE_DIR}/XSCALE.INP XSCALE.INP
 
+# Insert Durin plugin if HDF5 data
 if [ "${FILE_TYPE}" = "h5" ]; then
   sed -i "/NAME_TEMPLATE_OF_DATA_FRAMES/a LIB=${SOURCE_DIR}/durin-plugin.so" XDS.INP
 fi
 
-#Beam center
+# Apply optional parameters (beam center)
 if [ -n "${BEAM_X}" ]; then
     sed -i "s/ORGX=.*$/ORGX= ${BEAM_X} ORGY= ${BEAM_Y}/g" XDS.INP
 fi
 
-#Crystal to detector distance
+# Apply optional parameters (crystal to detector distance)
 if [ -n "${DISTANCE}" ]; then
     sed -i "s/DETECTOR_DISTANCE=.*$/DETECTOR_DISTANCE= ${DISTANCE}/g" XDS.INP
 fi
 
-#Image range
+# Apply optional parameters (image range)
 if [ -n "${IMAGE_START}" ] && [ -n "${IMAGE_END}" ]; then
     sed -i "s/DATA_RANGE=.*$/DATA_RANGE=${IMAGE_START} ${IMAGE_END}/g" XDS.INP
     sed -i "s/SPOT_RANGE=.*$/SPOT_RANGE=${IMAGE_START} ${IMAGE_END}/g" XDS.INP
 fi
 
-#Rotation axis selection
+# Apply optional parameters (rotation axis)
 if [ -n "${ROTATION_AXIS}" ]; then
     ROTATION_AXIS="${ROTATION_AXIS//,/ }"
     sed -i "s/ROTATION_AXIS=.*$/ROTATION_AXIS= ${ROTATION_AXIS}/g" XDS.INP
 fi
 
-#Space group and unit cell
+# Apply optional parameters (space group and unit cell)
 if [ -n "${SPACE_GROUP}" ]; then
     SPACE_GROUP_NUMBER=$(${SOURCE_DIR}/get_sg_number.sh "${SPACE_GROUP}")
     sed -i "s/SPACE_GROUP_NUMBER=.*$/SPACE_GROUP_NUMBER=${SPACE_GROUP_NUMBER}/g" XDS.INP
@@ -133,7 +175,12 @@ if [ -n "${UNIT_CELL_CONSTANTS}" ]; then
     sed -i "s/UNIT_CELL_CONSTANTS=.*$/UNIT_CELL_CONSTANTS=${UNIT_CELL_CONSTANTS}/g" XDS.INP
 fi
 
-#XDS processing
+#############################################
+# Run XDS pipeline step by step
+# (XYCORR → INIT → COLSPOT → IDXREF → DEFPIX → INTEGRATE → CORRECT, etc.)
+#############################################
+# Each step edits XDS.INP with the appropriate JOB keyword,
+# runs XDS or xds_par, saves logs and input snapshots, and checks for errors.
 
 #1_XYCORR
 sed -i 's/JOB=.*$/JOB= XYCORR/g' XDS.INP
@@ -271,7 +318,7 @@ cp XDS_ASCII.HKL 7_XDS_ASCII.HKL
 cat CORRECT.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
-#8_IDXREF Update UNTRUSTED_ELLIPSE ORGX ORGY DETECTOR_DISTANCE ROTATION_AXIS INCIDENT_BEAM_DIRECTION SPACE_GROUP_NUMBER UNIT_CELL_CONSTANTS
+#8_IDXREF Update SPACE_GROUP_NUMBER UNIT_CELL_CONSTANTS
 cp 4_IDXREF.INP XDS.INP
 if [ -n "${SPACE_GROUP}" ]; then
     SPACE_GROUP_NUMBER=$(${SOURCE_DIR}/get_sg_number.sh "${SPACE_GROUP}")
@@ -290,7 +337,7 @@ cp XPARM.XDS 8_XPARM.XDS
 cat IDXREF.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
-#9_DEFPIX
+#9_DEFPIX Update DETECTOR_DISTANCE ROTATION_AXIS INCIDENT_BEAM_DIRECTION
 cp 7_CORRECT.INP XDS.INP
 sed -i 's/JOB=.*$/JOB= DEFPIX/g' XDS.INP
 ORGX=$(awk 'NR == 9 {print $1}' 8_XPARM.XDS)
@@ -333,7 +380,10 @@ cp XDS_ASCII.HKL 11_XDS_ASCII.HKL
 cat CORRECT.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
-#12_XSCALE
+#############################################
+# Scaling, merging, and resolution estimation
+#############################################
+#12_XSCALE with xscale_par
 xscale_par > XSCALE.log
 cp XSCALE.log 12_XSCALE.log
 cp XSCALE.INP 12_XSCALE.INP
@@ -341,7 +391,7 @@ cp XSCALE.LP 12_XSCALE.LP
 cat XSCALE.log >> XDS_${ROUND}.log
 echo "" >> XDS_${ROUND}.log
 
-#13_pointless
+#13_pointless for HKL to mtz
 pointless xdsin XDS_XSCALE.HKL hklout pointless.mtz > pointless.log
 cp pointless.log 13_pointless.log
 cp pointless.mtz 13_pointless.mtz
@@ -374,7 +424,7 @@ if [ ! -f "XDS_unmerged.mtz" ]; then
     exit 1
 fi
 
-#15_dials.estimate_resolution cc_half=0.3 misigma=2.0 completeness=0.85
+#15_dials.estimate_resolution to refine resolution limit cc_half=0.3 misigma=2.0 completeness=0.85
 dials.estimate_resolution XDS_unmerged.mtz > /dev/null
 cp dials.estimate_resolution.log 15_dials.estimate_resolution.log
 cp dials.estimate_resolution.html 15_dials.estimate_resolution.html
@@ -383,7 +433,7 @@ echo "" >> XDS_${ROUND}.log
 resolution=$(sed -n '4,7p' dials.estimate_resolution.log | awk '{if ($NF ~ /^[0-9.]+$/) print $NF; else print ""}' | sort -nr | head -n 1)
 resolution=${resolution:-0}
 
-#16_aimless
+#16_aimless for merging with resolution cutoff
 {
 aimless hklin pointless.mtz hklout XDS.mtz xmlout aimless.xml scalepack XDS.sca > aimless.log << EOF
 RUN 1 ALL
@@ -414,7 +464,7 @@ else
     echo "XDS ${Rmeas_XDS}" >> ../../temp1.txt
 fi
 
-#17_ctruncate
+#17_ctruncate to generate truncated intensities
 {
 ctruncate -mtzin XDS.mtz -mtzout XDS_truncated.mtz -colin '/*/*/[IMEAN,SIGIMEAN]' -colano '/*/*/[I(+),SIGI(+),I(-),SIGI(-)]' > ctruncate.log
 } 2>/dev/null
@@ -430,7 +480,7 @@ if [ ! -f "XDS_truncated.mtz" ]; then
     exit 1
 fi
 
-#18_freeR_flag
+#18_freeR_flag to assign R-free set
 freerflag hklin XDS_truncated.mtz hklout XDS_free.mtz > freeR_flag.log 2>/dev/null << EOF
 FREERFRAC 0.05
 UNIQUE
@@ -448,10 +498,14 @@ fi
 
 cd ..
 
-#Output XDS processing result
+#############################################
+# Collect results and generate summary
+#############################################
 cp XDS_${ROUND}/XDS_free.mtz XDS_SUMMARY/XDS.mtz
 cp XDS_${ROUND}/XDS_${ROUND}.log XDS_SUMMARY/XDS.log
 cp ../header.log XDS_SUMMARY/XDS_SUMMARY.log
+
+# Append refined parameters and statistics to summary
 echo "Refined parameters:" >> XDS_SUMMARY/XDS_SUMMARY.log
 distance_refined=$(grep "CRYSTAL TO DETECTOR DISTANCE (mm)" XDS_${ROUND}/CORRECT.LP | awk '{print $6}')
 echo "Distance_refined               [mm] = ${distance_refined}" >> XDS_SUMMARY/XDS_SUMMARY.log
@@ -490,10 +544,12 @@ sed -n "${start},${end}p" ../XDS_${ROUND}/aimless.log > rmerge_and_i_over_sigma_
 grep -A24 '$TABLE: L test for twinning:' ../XDS_${ROUND}/ctruncate.log | tail -21 > L_test.dat
 L_statistic=$(grep 'L statistic =' ../XDS_${ROUND}/ctruncate.log | awk '{print $4}')
 
-#Plot statistics figures
+# Generate plots from AIMLESS and CTRUNCATE logs
 ${SOURCE_DIR}/plot.sh ${L_statistic}
 
-#Calculate and echo timing information
+#############################################
+# Timing information
+#############################################
 end_time=$(date +%s)
 total_time=$((end_time - start_time))
 hours=$((total_time / 3600))
@@ -501,5 +557,5 @@ minutes=$(( (total_time % 3600) / 60 ))
 seconds=$((total_time % 60))
 echo "Total time: ${hours}h ${minutes}m ${seconds}s" >> ../XDS_${ROUND}/XDS_${ROUND}.log
 
-#Go back to data_reduction folder
+# Return to main data reduction directory
 cd ../..

@@ -1,20 +1,63 @@
 #!/bin/bash
 #############################################################################################################
 # Script Name: autopipeline.sh
-# Description: This script controls all modules in the AutoPD.
-# Author: ZHANG Xin
-# Date Created: 2023-06-01
-# Last Modified: 2024-03-05
+# Description: Main controller script for AutoPD (Automated Pipeline for Data Reduction and Structure 
+#              Determination). This script coordinates all modules, including data reduction (XDS/xia2/autoPROC), 
+#              MrParse, molecular replacement (MR), AlphaFold prediction, and SAD phasing. It manages inputs,
+#              prepares directories, executes processing pipelines in parallel when possible, and logs results.
+#
+# Usage Example:
+#   ./autopipeline.sh data_path=/path/to/images seq_file=sequence.fasta \
+#       space_group=P212121 cell="78.3 84.1 96.5 90 90 90" rotation_axis="1,0,0" out_dir=AutoPD_run1
+#
+# Required Arguments:
+#   data_path       Directory containing diffraction images
+#   seq_file        Protein sequence file (FASTA)
+#
+# Optional Arguments:
+#   mtz_file        Experimental MTZ file (bypasses data reduction)
+#   uniprot_id      UniProt ID for fetching homologs
+#   pdb_path        Directory containing user-provided MR templates (.pdb)
+#   rotation_axis   Rotation axis vector (comma-separated, e.g., "1,0,0")
+#   out_dir         Output directory name (default: AutoPD_processed)
+#   mp_date         MrParse cutoff date for excluding homologs released after this date
+#   z               Number of copies in asymmetric unit
+#   atom            Atom type for anomalous scattering (default: Se)
+#   space_group     Space group symbol (e.g., P212121)
+#   cell            Unit cell constants "a b c alpha beta gamma"
+#   beam_x,beam_y   Beam center coordinates
+#   distance        Crystal-to-detector distance (mm)
+#   image_start,end Image range to process (numbers only)
+#   ipcas_cycle     Number of IPCAS cycles (default: 20)
+#   af_predict      true/false: Run AlphaFold prediction
+#   af_split        true/false: Split AlphaFold models with Phenix
+#   pae_split       true/false: Split AlphaFold models using PAE with CCP4
+#   sad             true/false: Enable SAD phasing
+#   model_build     Strategy for model building (if specified)
+#
+# Exit Codes:
+#   0  Success (pipeline completed normally)
+#   1  Failure (missing required inputs or MTZ files)
+#
+# Author:      ZHANG Xin
+# Created:     2023-06-01
+# Last Edited: 2025-08-03
 #############################################################################################################
+
 start_time=$(date +%s)
 
-#Get AutoPD directory
+#############################################
+# Locate AutoPD directory
+#############################################
 SOURCE_DIR=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-#Input variables
+#############################################
+# Initialize input variables
+#############################################
 DATA_PATH=""
 SEQUENCE=""
 EXPERIMENT=""
+UNIPROT_ID=""
 MR_TEMPLATE_PATH=""
 ROTATION_AXIS=""
 OUT_DIR="AutoPD_processed"
@@ -30,10 +73,14 @@ IMAGE_START=""
 IMAGE_END=""
 IPCAS_CYCLE="20"
 AF_PREDICT="false"
+AF_SPLIT="true"
 PAE_SPLIT="false"
 SAD="false"
 MODEL_BUILD=""
 
+#############################################
+# Parse command-line arguments
+#############################################
 for arg in "$@"; do
   if [[ "$arg" == *=* ]]; then
     key="${arg%%=*}"
@@ -43,14 +90,15 @@ for arg in "$@"; do
       data_path) DATA_PATH="$value";;            #The path contains diffraction images
       seq_file) SEQUENCE="$value";;              #The sequence file
       mtz_file) EXPERIMENT="$value";;            #The mtz file
+      uniprot_id) UNIPROT_ID="$value";;          #The uniprot_id
       pdb_path) MR_TEMPLATE_PATH="$value";;      #The path contains search models for MR
       rotation_axis) ROTATION_AXIS="$value";;    #Rotation axis, e.g. 1,0,0
       out_dir) OUT_DIR="$value";;                #Output folder name
       mp_date) DATE="$value";;                   #The homologs released after this date will be excluded from the result of MrParse, for data testing.
       z) Z_INPUT="$value";;                      #The number of asymmetric unit copies 
       atom) ATOM="$value";;                      #The atom type of anomalous scattering
-      space_group) SPACE_GROUP_INPUT="$value";;        #Space group
-      cell) CELL_CONSTANTS_INPUT="$value";;            #Cell Parameters
+      space_group) SPACE_GROUP_INPUT="$value";;  #Space group
+      cell) CELL_CONSTANTS_INPUT="$value";;      #Cell Parameters
       beam_x) BEAM_X="$value" ;;                 #Beam center x
       beam_y) BEAM_Y="$value" ;;                 #Beam center y
       distance) DISTANCE="$value" ;;             #The crystal to detector distance
@@ -58,6 +106,7 @@ for arg in "$@"; do
       image_end) IMAGE_END="$value" ;;           #Process a specific image range within a scan. image_start and image_end are numbers denoting the image range
       ipcas_cycle) IPCAS_CYCLE="$value" ;;       #IPCAS cycle
       af_predict) AF_PREDICT="$value" ;;         #AlphaFold Prediction by Phenix
+      af_split) AF_SPLIT="$value" ;;             #Splitting by Phenix
       pae_split) PAE_SPLIT="$value" ;;           #PAE Splitting by CCP4
       sad) SAD="$value" ;;                       #SAD will be performed
       model_build) MODEL_BUILD="$value" ;;       #Model building strategy
@@ -68,14 +117,20 @@ for arg in "$@"; do
   fi
 done
 
+#############################################
+# Normalize paths
+#############################################
 DATA_PATH=$(readlink -f "${DATA_PATH}")
 SEQUENCE=$(readlink -f "${SEQUENCE}")
 EXPERIMENT=$(readlink -f "${EXPERIMENT}")
 MR_TEMPLATE_PATH=$(readlink -f "${MR_TEMPLATE_PATH}")
 
-export SOURCE_DIR DATA_PATH SEQUENCE ROTATION_AXIS BEAM_X BEAM_Y DISTANCE IMAGE_START IMAGE_END Z_INPUT ATOM SPACE_GROUP_INPUT CELL_CONSTANTS_INPUT AF_PREDICT PAE_SPLIT IPCAS_CYCLE MODEL_BUILD 
+# Export key variables for child scripts
+export SOURCE_DIR DATA_PATH SEQUENCE UNIPROT_ID ROTATION_AXIS BEAM_X BEAM_Y DISTANCE IMAGE_START IMAGE_END Z_INPUT ATOM SPACE_GROUP_INPUT CELL_CONSTANTS_INPUT AF_PREDICT PAE_SPLIT IPCAS_CYCLE MODEL_BUILD AF_SPLIT
 
-#Create and enter folder for data processing
+#############################################
+# Prepare output directories
+#############################################
 if [ -d "$OUT_DIR" ]; then
   suffix=1
   while [ -d "${OUT_DIR}_${suffix}" ]; do
@@ -88,7 +143,9 @@ mkdir -p ${OUT_DIR}
 cd ${OUT_DIR}
 mkdir -p SUMMARY INPUT_FILES SEARCH_MODELS/HOMOLOGS SEARCH_MODELS/AF_MODELS SEARCH_MODELS/INPUT_MODELS
 
-#Input check
+#############################################
+# Input checks
+#############################################
 if [ -z "${DATA_PATH}" ]; then
     echo "Warning: No data path was input. Data reduction will be skipped."
     DR="false"
@@ -136,18 +193,13 @@ else
     echo "MR template path: ${MR_TEMPLATE_PATH}"
     MP="false"
 fi
-#Data reduction and MrParse
+
+#############################################
+# Data Reduction & MrParse
+#############################################
 echo "============================================================================================="
 echo "                                   Data reduction & MrParse                                  "
 echo "============================================================================================="
-
-#Optional parameters
-#args=()
-#for param in "space_group=${SPACE_GROUP}" "cell_constants=${CELL_CONSTANTS}"; do
-#    IFS="=" read -r key value <<< "$param"
-#    [ -n "$value" ] && args+=("$key=$value")
-#done
-#echo ${args[@]}
 
 if [ "${DR}" = "false" ] && [ "${MP}" = "false" ]; then
   echo ""
@@ -164,18 +216,21 @@ else
   parallel -u ::: "${SOURCE_DIR}/search_model.sh ${DATE} | tee SEARCH_MODEL.log" "${SOURCE_DIR}/data_reduction.sh | tee DATA_REDUCTION.log"
 fi
 
+# Require sequence for further steps
 if [ ! -f "${SEQUENCE}" ]; then 
     echo "Normal termination: Sequence is needed for the following parts." 
     exit 0
 fi
 
+# Require at least one MTZ
 if [ -z "$(find DATA_REDUCTION/DATA_REDUCTION_SUMMARY -maxdepth 1 -type f -name '*.mtz' 2>/dev/null)" ] && [ -z "$(find INPUT_FILES -maxdepth 1 -type f -name '*.mtz' 2>/dev/null)" ]; then
     echo "ERROR: No mtz files found."
     exit 1
 fi
 
-#SAD
-
+#############################################
+# SAD signal check
+#############################################
 if [ -d "DATA_REDUCTION/SAD_INPUT" ] && find "DATA_REDUCTION/SAD_INPUT" -maxdepth 1 -type f -size +0 2>/dev/null | grep -q .; then
     SAD="true"
     echo "SAD will be performed."
@@ -183,13 +238,17 @@ else
     echo "No strong anomalous signal was found."
 fi
 
-#MR
-
+#############################################
+# Molecular Replacement (MR) check
+#############################################
 if [ -z "$(find SEARCH_MODELS -maxdepth 2 -type f -name '*.pdb')" ]; then
     echo "No search model was found."
     MR="false"
 fi
 
+#############################################
+# Run MR and/or SAD
+#############################################
 echo ""
 echo "============================================================================================="
 echo "                                 Molecular Replacement & SAD                                 "
@@ -211,7 +270,9 @@ else
   parallel -u ::: "${SOURCE_DIR}/sad.sh ${MTZ_IN}" "${SOURCE_DIR}/mr_model_build.sh ${MTZ_IN}"
 fi 
 
-#Calculate and echo timing information
+#############################################
+# Print timing information
+#############################################
 end_time=$(date +%s)
 total_time=$((end_time - start_time))
 hours=$((total_time / 3600))

@@ -1,6 +1,15 @@
 #!/bin/bash
+#############################################################################################################
+# Script Name: get_sg_number.sh
+# Description: Look up International Tables for Crystallography space group numbers from symbols (65 common).
+# Usage: ./sg2num.sh <space_group_symbol>
+# Example: ./sg2num.sh P212121  -> 19
+# Author: ZHANG Xin
+# Created: 2023-06-01
+# Last Modified: 2024-08-03
+#############################################################################################################
 
-# 定义一个关联数组来存储蛋白质常见的65个空间群符号和对应的号码
+# Define an associative array mapping 65 common protein space group symbols to their ITC numbers
 declare -A space_groups=(
   ["P1"]=1
   ["P121"]=3
@@ -69,9 +78,22 @@ declare -A space_groups=(
   ["I4132"]=214
 )
 
+# Input validation
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 <space_group_symbol>"
+  echo "Example: $0 P212121"
+  exit 1
+fi
+
+# Retrieve the input space group symbol
 space_group_symbol=$1
 
-# 查找空间群号码
+# Look up the corresponding space group number; default to 0 if not found
 space_group_number=${space_groups[$space_group_symbol]:-0}
 
-echo $space_group_number
+# Output result
+if [ "$space_group_number" -eq 0 ]; then
+  echo "Error: Unknown space group symbol '$space_group_symbol'."
+else
+  echo $space_group_number
+fi

@@ -79,36 +79,16 @@ for ((i=1; i<=num_mtz_files; i++)); do
   
   
   # Determine Z (number of molecules per ASU)
-  if [[ -z "${Z_NUMBER}" ]]; then
-    #phaser_cca
-    phaser << eof > phaser_cca.log
-    TITLE phaser_cca
-    MODE CCA
-    ROOT PHASER_CCA
-    HKLIN ${mtz_file}
-    LABIN F=F SIGF=SIGF
-    COMPOSITION BY ASU
-    COMPOSITION PROTEIN SEQ ${SEQUENCE} NUM 1
-eof
-
-    #Extract NUMBER from phaser_cca result
-    CCA_EXIT_STATUS=$(grep 'EXIT STATUS:' phaser_cca.log | awk '{print $3}')
-
-    echo ""
-    echo "MR_${FLAG}_$i Phaser CCA EXIT STATUS: ${CCA_EXIT_STATUS}"
-    
-    if [ ${CCA_EXIT_STATUS} == "FAILURE" ]; then
-      Z_NUMBER=1
-    else
-      Z_NUMBER=$(awk '/loggraph/{flag=1;next}/\$\$/{flag=0}flag' phaser_cca.log | sort -k2,2nr | head -n 1 | awk '{print $1}')
-    fi
-    echo ""
+  if [[ -z "${Z_INPUT}" ]]; then
+    phenix.xtriage ${mtz_file} ${SEQUENCE} obs_labels='F,SIGF' > xtriage.log
+    #Extract NUMBER from phenix.xtriage result
+    Z_NUMBER=$(grep 'Best guess :' xtriage.log | awk '{print $4}')
+    Z_NUMBER=${Z_NUMBER:-1}
     echo "MR_${FLAG}_$i Most probable Z=${Z_NUMBER}"
   else
-    echo "Input Z=${Z_NUMBER}"
+    echo "Input Z=${Z_INPUT}"
+    Z_NUMBER=${Z_INPUT}
   fi
-  
-  echo "Z=${Z_NUMBER}" >> phaser_cca.log
   
   # Prepare Phaser input script
   echo "TITLE phaser_mr
@@ -116,46 +96,23 @@ MODE MR_AUTO
 ROOT PHASER
 HKLIN ${mtz_file}
 LABIN F=F SIGF=SIGF
-SGALTERNATIVE SELECT ALL
-TNCS USE OFF
-PACK SELECT PERCENT
-PACK CUTOFF 10
-PEAKS ROT SELECT PERCENT
-PEAKS ROT CUTOFF 75
-PEAKS ROT CLUSTER ON
-PEAKS TRA SELECT PERCENT
-PEAKS TRA CUTOFF 75
-PEAKS ROT DOWN 15
-PURGE ROT ENABLE ON
-PURGE ROT PERCENT 75
-PURGE TRA ENABLE ON
-PURGE TRA PERCENT 75
-PURGE RNP ENABLE ON
-PURGE RNP PERCENT 75
-SEARCH METHOD FAST
-SEARCH PRUNE ON
-TRANSLATION PACKING USE ON
-FORMFACTORS XRAY" > phaser_input.txt
+SGALTERNATIVE SELECT ALL" > phaser_input.txt
 
   # Add ensembles to Phaser input
   for ((j=1; j<=${TEMPLATE_NUMBER}; j++)); do
     first_line=$(head -n 1 ${ENSEMBLE_PATH}/ENSEMBLE${j}.pdb)
     
-    if [[ $first_line == *"VRMS="* ]]; then
-      VRMS=$(echo "$first_line" | grep -oE 'VRMS=[0-9]+\.[0-9]+' | cut -d'=' -f2)
-      echo "ENSEMBLE ensemble${j} PDB ${ENSEMBLE_PATH}/ENSEMBLE${j}.pdb RMS ${VRMS}" >> phaser_input.txt
+    if [[ $first_line == *ID* ]]; then
+      IDENTITY=$(echo "$first_line" | awk -F 'ID ' '{print $2}')
     else
       IDENTITY=90
-      echo "ENSEMBLE ensemble${j} PDB ${ENSEMBLE_PATH}/ENSEMBLE${j}.pdb IDENTITY ${IDENTITY}" >> phaser_input.txt
     fi
-    echo "ENSEMBLE ensemble${j} HETATM ON" >> phaser_input.txt
+    echo "ENSEMBLE ensemble${j} PDB ${ENSEMBLE_PATH}/ENSEMBLE${j}.pdb IDENTITY ${IDENTITY}" >> phaser_input.txt
   done
   
   # Define composition based on sequence and Z
   echo "COMPOSITION BY ASU" >> phaser_input.txt
-if [ ${CCA_EXIT_STATUS} == "SUCCESS" ]; then
   echo "COMPOSITION PROTEIN SEQ ${SEQUENCE} NUM ${Z_NUMBER}" >> phaser_input.txt
-fi
 
   # Set search instructions
   for ((j=1; j<=TEMPLATE_NUMBER; j++)); do

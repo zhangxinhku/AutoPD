@@ -43,23 +43,23 @@
 start_time=$(date +%s)
 
 echo ""
-echo "----------------------------------------- Buccaneer -----------------------------------------"
+echo "----------------------------------------- ModelCraft -----------------------------------------"
 echo ""
 
-# Create folder for Buccaneer runs
-mkdir -p BUCCANEER
-cd BUCCANEER
-mkdir -p BUCCANEER_SUMMARY
+# Create folder for ModelCraft runs
+mkdir -p MODELCRAFT
+cd MODELCRAFT
+mkdir -p MODELCRAFT_SUMMARY
 
 start_dir=$(pwd)
 
-# Run Buccaneer for each MR solution
+# Run ModelCraft for each MR solution
 for folder in ../PHASER_MR/MR_SUMMARY/*; do
   if [ -d "$folder" ]; then
     folder_path=$(realpath "$folder")
     folder_name=$(basename "$folder")
-    mkdir -p "BUCCANEER_${folder_name}"
-    cd "BUCCANEER_${folder_name}" || exit
+    mkdir -p "MODELCRAFT_${folder_name}"
+    cd "MODELCRAFT_${folder_name}" || exit
     
     # Choose PDB: prefer refined model if available, fallback to Phaser output
     if [ -f "${folder_path}/REFINEMENT/XYZOUT.pdb" ]; then
@@ -75,28 +75,28 @@ for folder in ../PHASER_MR/MR_SUMMARY/*; do
         MTZ=$(find ${folder_path} -maxdepth 1 -name "*.mtz" -print -quit)
     fi
     
-    # Run Buccaneer in background
-    ${SOURCE_DIR}/i2_buccaneer.sh ${MTZ} ${PDB} &
+    # Run ModelCraft in background
+    ${SOURCE_DIR}/i2_modelcraft.sh ${MTZ} ${PDB} &
     cd "$start_dir" || exit
   fi
 done
 
-# Wait for all parallel Buccaneer jobs
+# Wait for all parallel ModelCraft jobs
 wait
-echo "All Buccaneer processes finished!"
+echo "All ModelCraft processes finished!"
 echo ""
 
 cd "$start_dir" || exit
 
-# Summarize results from all Buccaneer runs
-for folder in BUCCANEER_MR*; do
+# Summarize results from all ModelCraft runs
+for folder in MODELCRAFT_MR*; do
   if [ -d "$folder" ]; then
     folder_name=$(basename "$folder")
     mr_folder_name="${folder_name#*_}"
     
     # Extract R-work and R-free
-    r_work=$(grep 'R VALUE            (WORKING SET) :' "$folder_name/XYZOUT.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
-    r_free=$(grep 'FREE R VALUE                     :' "$folder_name/XYZOUT.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
+    r_work=$(grep "R-work:" $folder_name/MODELCRAFT.log | tail -n 1 | awk '{print $2}' 2>/dev/null)
+    r_free=$(grep "R-free:" $folder_name/MODELCRAFT.log | tail -n 1 | awk '{print $2}' 2>/dev/null)
     r_free_refine=$(grep 'FREE R VALUE                     :' "../PHASER_MR/$mr_folder_name/REFINEMENT/XYZOUT.pdb" 2>/dev/null | cut -d ':' -f 2 | xargs)
     
     echo "$folder_name: R-work=$r_work  R-free=$r_free"
@@ -105,31 +105,30 @@ for folder in BUCCANEER_MR*; do
     r_free=${r_free:-99999}
     r_free_refine=${r_free_refine:-99999}
     
-    echo "$mr_folder_name $r_free_refine $r_free" >> BUCCANEER_SUMMARY/SUMMARY.txt
+    echo "$mr_folder_name $r_free_refine $r_free" >> MODELCRAFT_SUMMARY/SUMMARY.txt
   fi
 done
 
-# Identify best Buccaneer run
-best_r_free=$(sort -k3,3n "BUCCANEER_SUMMARY/SUMMARY.txt" | awk 'NR==1 {print $3}')
-best_r_free_refine=$(sort -k3,3n "BUCCANEER_SUMMARY/SUMMARY.txt" | awk 'NR==1 {print $2}')
+# Identify best ModelCraft run
+best_r_free=$(sort -k3,3n "MODELCRAFT_SUMMARY/SUMMARY.txt" | awk 'NR==1 {print $3}')
+best_r_free_refine=$(sort -k3,3n "MODELCRAFT_SUMMARY/SUMMARY.txt" | awk 'NR==1 {print $2}')
 best_r_free=${best_r_free:-99}
 best_r_free_refine=${best_r_free_refine:-99}
 
 if [ $(echo "$best_r_free < $best_r_free_refine" | bc) -eq 1 ]; then
-    best=$(sort -k3,3n "BUCCANEER_SUMMARY/SUMMARY.txt" | awk 'NR==1 {print $1}')
+    best=$(sort -k3,3n "MODELCRAFT_SUMMARY/SUMMARY.txt" | awk 'NR==1 {print $1}')
 else
-    best=$(sort -k2,2n "BUCCANEER_SUMMARY/SUMMARY.txt" | awk 'NR==1 {print $1}')
+    best=$(sort -k2,2n "MODELCRAFT_SUMMARY/SUMMARY.txt" | awk 'NR==1 {print $1}')
 fi
 
-# Copy best Buccaneer results
+# Copy best ModelCraft results
 if [ -n "$best" ]; then
-  cp "BUCCANEER_${best}/BUCCANEER.log" BUCCANEER_SUMMARY/
-  cp "BUCCANEER_${best}/XYZOUT.pdb" BUCCANEER_SUMMARY/BUCCANEER.pdb
-  cp "BUCCANEER_${best}/FPHIOUT.mtz" BUCCANEER_SUMMARY/BUCCANEER.mtz
-  echo "Best R-free $best_r_free is from BUCCANEER_${best}" | tee -a BUCCANEER_SUMMARY/BUCCANEER.log
+  cp "MODELCRAFT_${best}/MODELCRAFT.log" MODELCRAFT_SUMMARY/
+  cp MODELCRAFT_${best}/modelcraft/* MODELCRAFT_SUMMARY/
+  echo "Best R-free $best_r_free is from MODELCRAFT_${best}" | tee -a MODELCRAFT_SUMMARY/MODELCRAFT.log
   
   # Copy results to global SUMMARY
-  cp BUCCANEER_SUMMARY/* ../SUMMARY/
+  cp MODELCRAFT_SUMMARY/* ../SUMMARY/
   cp ../PHASER_MR/MR_SUMMARY/${best}/*.* ../SUMMARY/
   cp ../PHASER_MR/MR_SUMMARY/${best}/REFINEMENT/XYZOUT.pdb ../SUMMARY/REFINEMENT.pdb
   cp ../PHASER_MR/MR_SUMMARY/${best}/REFINEMENT/FPHIOUT.mtz ../SUMMARY/REFINEMENT.mtz
@@ -160,8 +159,8 @@ hours=$((total_time / 3600))
 minutes=$(( (total_time % 3600) / 60 ))
 seconds=$((total_time % 60))
 
-echo "" | tee -a BUCCANEER_SUMMARY/BUCCANEER.log
-echo "Buccaneer took: ${hours}h ${minutes}m ${seconds}s" | tee -a BUCCANEER_SUMMARY/BUCCANEER.log
+echo "" | tee -a MODELCRAFT_SUMMARY/MODELCRAFT.log
+echo "ModelCraft took: ${hours}h ${minutes}m ${seconds}s" | tee -a MODELCRAFT_SUMMARY/MODELCRAFT.log
 
 # Go to data processing folder
 cd ..

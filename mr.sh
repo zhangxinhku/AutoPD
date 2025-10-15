@@ -1,22 +1,67 @@
 #!/bin/bash
 #############################################################################################################
 # Script Name: mr.sh
-# Description: This script is used for molecular replacement.
+# Description: This script performs Molecular Replacement (MR) using Phaser with multiple sets of 
+#              potential search models (input models, homologous models, AlphaFold models). 
+#              It automatically selects the best MR solutions based on LLG/TFZ scores, 
+#              performs refinement, and records summary statistics (R-work, R-free).
+#
+# Workflow:
+#   1. Standardize and rename input search models into ENSEMBLE#.pdb format.
+#   2. Create a working directory (PHASER_MR).
+#   3. Run Phaser MR with:
+#        - Input models (if provided), otherwise
+#        - Homologous models and AlphaFold models (in parallel), otherwise
+#        - AlphaFold models only.
+#   4. Parse MR solutions and extract:
+#        - Log-Likelihood Gain (LLG)
+#        - Translation Function Z-score (TFZ)
+#        - Space group and point group
+#   5. Select best MR results:
+#        - Prefer TFZ ≥ 8 (statistically significant)
+#        - At most one solution per space group
+#   6. Refine the best MR solutions with REFMAC/Phenix (via refine.sh).
+#   7. Append refinement results (R-work and R-free) to MR summary.
+#   8. Save outputs in PHASER_MR/MR_SUMMARY.
+#
+# Usage:
+#   ./mr.sh <MTZ_IN>
+#
+# Arguments:
+#   MTZ_IN   Integer flag
+#            - 1: An experimental MTZ file was provided (skip data reduction).
+#            - 0: Use MTZ from data reduction results.
+#
+# Outputs:
+#   - PHASER_MR/MR_SUMMARY/MR_BEST.txt : Best MR solutions with LLG, TFZ, SG, PG, R-work, R-free
+#   - PHASER_MR/MR_SUMMARY/phaser_mr.log : Execution log with timing info
+#   - PHASER_MR/<run_folder>/PHASER.1.pdb : Best MR model
+#   - PHASER_MR/<run_folder>/REFINEMENT/XYZOUT.pdb : Refined structure
+#
+# Dependencies:
+#   - CCP4 (Phaser, REFMAC)
+#   - GNU Parallel
+#   - awk, grep, bc, sort, timeout
+#
 # Author: ZHANG Xin
 # Date Created: 2023-06-01
-# Last Modified: 2024-03-05
+# Last Modified: 2025-08-03
 #############################################################################################################
+
 
 start_time=$(date +%s)
 
-#Input variables
+# Input flag: determines whether to use provided MTZ or reduced MTZ
 MTZ_IN=${1}
 
+# ----------------------------------------
+# Function: Standardize search model naming
+# Rename .pdb files sequentially as ENSEMBLE1.pdb, ENSEMBLE2.pdb, etc.
+# ----------------------------------------
 rename_pdb_files() {
   local directory=$1
   if [ -d "$directory" ] && [ "$(ls -A "$directory")" ]; then
     local counter=1
-    # 按数字排序处理文件
     for file in $(ls "$directory"/*.pdb | sort -V); do
       new_name="$directory/ENSEMBLE${counter}.pdb"
       mv -f "$file" "$new_name" 2>/dev/null || true
@@ -29,7 +74,9 @@ rename_pdb_files "SEARCH_MODELS/INPUT_MODELS"
 rename_pdb_files "SEARCH_MODELS/HOMOLOGS"
 rename_pdb_files "SEARCH_MODELS/AF_MODELS"
 
-#Create folder for molecular replacement
+# ----------------------------------------
+# Create working directory for Phaser MR
+# ----------------------------------------
 rm -rf PHASER_MR
 mkdir -p PHASER_MR
 cd PHASER_MR
@@ -39,30 +86,35 @@ echo ""
 echo "------------------------------------------Phaser MR------------------------------------------"
 echo ""
 
-#Get mtz files folder
+# ----------------------------------------
+# Determine source of MTZ input
+# ----------------------------------------
 if [ "${MTZ_IN}" -eq 1 ]; then
   mtz_dir=$(realpath ../INPUT_FILES)
 else
   mtz_dir=$(realpath ../DATA_REDUCTION/DATA_REDUCTION_SUMMARY)
 fi
 
-#Do MR for each file in mtz folder
-#Determine the number of search models
+# ----------------------------------------
+# Run Phaser MR with available models
+# ----------------------------------------
 if [ -d "../SEARCH_MODELS/INPUT_MODELS" ] && [ "$(ls -A ../SEARCH_MODELS/INPUT_MODELS)" ]; then
   TEMPLATE_NUMBER=$(ls ../SEARCH_MODELS/INPUT_MODELS/*.pdb | wc -l)
-  timeout 60h ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER} ${mtz_dir} ../SEARCH_MODELS/INPUT_MODELS I
+  timeout 600h ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER} ${mtz_dir} ../SEARCH_MODELS/INPUT_MODELS I
 elif [ -d "../SEARCH_MODELS/HOMOLOGS" ] && [ "$(ls -A ../SEARCH_MODELS/HOMOLOGS)" ]; then
   TEMPLATE_NUMBER_H=$(ls ../SEARCH_MODELS/HOMOLOGS/*.pdb | wc -l)
   TEMPLATE_NUMBER_AF=$(ls ../SEARCH_MODELS/AF_MODELS/*.pdb | wc -l)
   parallel -u ::: \
-    "timeout 60h ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER_H} ${mtz_dir} ../SEARCH_MODELS/HOMOLOGS H" \
-    "timeout 60h ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER_AF} ${mtz_dir} ../SEARCH_MODELS/AF_MODELS A"
+    "timeout 600h ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER_H} ${mtz_dir} ../SEARCH_MODELS/HOMOLOGS H" \
+    "timeout 600h ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER_AF} ${mtz_dir} ../SEARCH_MODELS/AF_MODELS A"
 else
   TEMPLATE_NUMBER=$(ls ../SEARCH_MODELS/AF_MODELS/*.pdb | wc -l)
-  timeout 60h ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER} ${mtz_dir} ../SEARCH_MODELS/AF_MODELS A
+  timeout 600h ${SOURCE_DIR}/phaser.sh ${TEMPLATE_NUMBER} ${mtz_dir} ../SEARCH_MODELS/AF_MODELS A
 fi
 
-#Extract and show MR results
+# ----------------------------------------
+# Extract MR results: LLG, TFZ, Space Group, Point Group
+# ----------------------------------------
 > MR_SUMMARY/MR_SUMMARY.txt
 for dir in ./*/; do
   folder_name=$(basename "$dir")
@@ -75,19 +127,29 @@ for dir in ./*/; do
   fi
 done
 
+# ----------------------------------------
+# Select best MR solutions
+# Prefer TFZ ≥ 8; one solution per space group
+# ----------------------------------------
 if [ -s "MR_SUMMARY/MR_SUMMARY.txt" ]; then
-  sort -k2,2nr "MR_SUMMARY/MR_SUMMARY.txt" | awk '
-  {
-    if (!($3 in seen)) {
+  if awk '$5 >= 8 { exit 1 }' "MR_SUMMARY/MR_SUMMARY.txt"; then
+    cat "MR_SUMMARY/MR_SUMMARY.txt"
+  else
+    awk '$5 >= 8' "MR_SUMMARY/MR_SUMMARY.txt"
+  fi | sort -k5,5nr | awk '
+    {
+      if (!($3 in seen)) {
         print $0
         seen[$3] = 1
-    }
-  }
-  ' > MR_SUMMARY/MR_BEST.txt
+      }
+    }' > MR_SUMMARY/MR_BEST.txt
   echo ""
   echo "MR Results:"
   awk '{print $1, "LLG="$2, "TFZ="$5, "Space Group: "$3}' MR_SUMMARY/MR_BEST.txt
-  #!/bin/bash
+  
+  # ----------------------------------------
+  # Refine best MR solutions
+  # ----------------------------------------
   awk '{print $1}' "MR_SUMMARY/MR_BEST.txt" | while read -r folder_name; do
     PDB=$(readlink -f "$folder_name/PHASER.1.pdb")
     if [ -f "$folder_name/PHASER.1.mtz" ]; then
@@ -117,7 +179,9 @@ else
   echo "No MR solution!"
 fi
 
-#Calculate and echo timing information
+# ----------------------------------------
+# Report timing
+# ----------------------------------------
 end_time=$(date +%s)
 total_time=$((end_time - start_time))
 hours=$((total_time / 3600))
@@ -127,5 +191,5 @@ seconds=$((total_time % 60))
 echo "" | tee -a MR_SUMMARY/phaser_mr.log
 echo "Molecular replacement took: ${hours}h ${minutes}m ${seconds}s" | tee -a MR_SUMMARY/phaser_mr.log
 
-#Go to data processing folder
+# Go to data processing folder
 cd ..
