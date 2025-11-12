@@ -25,6 +25,10 @@ sudo apt install gnuplot
 ```
 sudo apt-get install hdf5-tools
 ```
+### pandas
+```
+pip install pandas
+```
 ### IPCAS (optional)
 The installation package for IPCAS can be found on the main page. Follow these commands to install:
 ```
