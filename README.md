@@ -21,6 +21,10 @@ sudo apt install parallel
 ```
 sudo apt install gnuplot
 ```
+### HDF5 Tools
+```
+sudo apt-get install hdf5-tools
+```
 ### IPCAS (optional)
 The installation package for IPCAS can be found on the main page. Follow these commands to install:
 ```
